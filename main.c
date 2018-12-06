@@ -9,6 +9,7 @@
 #define NUM_CITIES 197769
 #define BUFF_SIZE 255
 #define MAX_CAND 15
+#define PENALTY 1.1
 
 
 struct Point {
@@ -27,11 +28,17 @@ struct Node {
     double cumFw[10], cumBack[10];
 };
 
+int tour[NUM_CITIES];
 int primes[NUM_CITIES];
 struct Point cities[NUM_CITIES];
+struct Node nodes[NUM_CITIES];
 // At [i][0].city is size of candidates for city i
 struct Cand candidates[NUM_CITIES][MAX_CAND + 1];
 #define CAND_SIZE(x) (candidates[x][0].city)
+
+double getTourCost(struct Node nodes[]);
+
+void buildNodes(int const tour[], struct Node nodes[]);
 
 void fillPrimes();
 
@@ -46,13 +53,69 @@ double dist(double x1, double y1, double x2, double y2);
 double distCity(int a, int b);
 
 int main() {
-    int tour[NUM_CITIES];
     readCities("cities.csv");
     readTourLinkern("out6.proc", tour);
     buildCandidates("my2.cand", tour);
     fillPrimes();
+    buildNodes(tour, nodes);
+    printf("%.5lf", getTourCost(nodes));
 
     return 0;
+}
+
+double getTourCost(struct Node nodes[]) {
+    return nodes[0].cumFw[NUM_CITIES % 10];
+}
+
+void buildNodes(int const tour[], struct Node nodes[]) {
+    int curCity = tour[1];
+    int tourPos = 2;
+    int prev = 0;
+    bool fullLoop = false;
+    do {
+        int to;
+        if (curCity == 0) {
+            to = tour[1];
+            fullLoop = true;
+        } else if (tourPos != NUM_CITIES) {
+            to = tour[tourPos];
+        } else {
+            to = 0;
+        }
+        struct Node *node = &nodes[curCity];
+        node->cityId = curCity;
+        node->from = &nodes[prev];
+        node->to = &nodes[to];
+        node->step = tourPos;
+        struct Node *prevNode = &nodes[prev];
+        double d = distCity(curCity, prev);
+        for (int m = 0; m < 10; m++) {
+            double cum = prevNode->cumFw[m == 0 ? 9 : m - 1];
+            node->cumFw[m] += cum + ((m == 0 && !primes[prev]) ? d * PENALTY : d);
+        }
+        prev = curCity;
+        curCity = to;
+        tourPos++;
+    } while (!fullLoop);
+
+    nodes[0].step = 1;
+
+    curCity = tour[NUM_CITIES - 1];
+    prev = 0;
+    int step = 2;
+    do {
+        struct Node *node = &nodes[curCity];
+        node->backStep = step;
+        struct Node *prevNode = &nodes[prev];
+        double d = distCity(prev, curCity);
+        for (int m = 0; m < 10; m++) {
+            double cum = prevNode->cumBack[m == 0 ? 9 : m - 1];
+            node->cumBack[m] += cum + ((m == 0 && !primes[prev]) ? d * PENALTY : d);
+        }
+        step++;
+        prev = curCity;
+        curCity = node->from->cityId;
+    } while (curCity != tour[NUM_CITIES - 1]);
 }
 
 void fillPrimes() {
