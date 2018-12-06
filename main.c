@@ -20,10 +20,20 @@ struct Cand {
     double dist;
 };
 
+struct Node {
+    int cityId;
+    struct Node *from, *to;
+    int step, backStep;
+    double cumFw[10], cumBack[10];
+};
+
+int primes[NUM_CITIES];
 struct Point cities[NUM_CITIES];
 // At [i][0].city is size of candidates for city i
 struct Cand candidates[NUM_CITIES][MAX_CAND + 1];
 #define CAND_SIZE(x) (candidates[x][0].city)
+
+void fillPrimes();
 
 void readCities(const char fileName[]);
 
@@ -40,8 +50,24 @@ int main() {
     readCities("cities.csv");
     readTourLinkern("out6.proc", tour);
     buildCandidates("my2.cand", tour);
+    fillPrimes();
 
     return 0;
+}
+
+void fillPrimes() {
+    memset(primes, 1, sizeof(primes));
+
+    primes[0] = 0;
+    primes[1] = 0;
+    for (int i = 2; i < sqrt(NUM_CITIES) + 1; i++) {
+        if (!primes[i]) {
+            continue;
+        }
+        for (int h = i + i; h < NUM_CITIES; h += i) {
+            primes[h] = 0;
+        }
+    }
 }
 
 double distCity(int a, int b) {
