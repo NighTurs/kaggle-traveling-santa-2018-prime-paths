@@ -123,16 +123,21 @@ int main() {
     }
 
     clock_t start, end;
-    start = clock();
-    kOptStart(&data, order, NUM_CITIES);
-    end = clock();
-    printf("%.5lf\n", ((double) (end - start)) / CLOCKS_PER_SEC);
-
-    printf("%.5lf\n", data.maxGain);
-
-    calcNewNodes(data.tBest, data.inclBest, data.bestK, data.bestRev, nodes, nodes, tour);
-
-    printf("%.5lf\n", getTourCost(nodes));
+    do {
+        double curCost = getTourCost(nodes);
+        data.maxGain = 0;
+        start = clock();
+        kOptStart(&data, order, NUM_CITIES);
+        end = clock();
+        calcNewNodes(data.tBest, data.inclBest, data.bestK, data.bestRev, nodes, nodes, tour);
+        double newCost = getTourCost(nodes);
+        printf("Time=%.3lf Gain=%.3lf GainDiff=%.3lf Cost=%.3lf\n",
+               ((double) (end - start)) / CLOCKS_PER_SEC,
+               data.maxGain,
+               curCost - newCost - data.maxGain,
+               newCost
+        );
+    } while (data.maxGain > E);
 
     return 0;
 }
