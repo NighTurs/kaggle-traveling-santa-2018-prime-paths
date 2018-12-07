@@ -12,6 +12,7 @@
 #define NUM_CITIES 197769
 #define BUFF_SIZE 255
 #define MAX_CAND 15
+#define MAX_REC 10
 #define PENALTY 1.1
 #define MAX_K 20
 #define ILLEGAL_OPT -1e6
@@ -49,8 +50,10 @@ typedef struct {
     double dist[MAX_K * 2 + 1];
     PStruct p[MAX_K * 2 + 1];
     int q[MAX_K * 2 + 1];
-    int cycle[MAX_K * 2 + 1];
-    int size[MAX_K * 2 + 1];
+    PStruct recP[MAX_REC][MAX_K * 2 + 1];
+    int recQ[MAX_REC][MAX_K * 2 + 1];
+    int cycle[MAX_REC][MAX_K * 2 + 1];
+    int size[MAX_REC][MAX_K * 2 + 1];
     double maxGain;
     int maxK;
     int bestK;
@@ -74,7 +77,7 @@ void kOptMovRec(KOptData *data, int k);
 
 double gainKOptMove(KOptData *data, int k);
 
-void findPermutation(KOptData *data, int k);
+void findPermutation(KOptData *data, PStruct p[], int q[], int k);
 
 double calcPenalty(Node *city, int step);
 
@@ -207,7 +210,7 @@ void kOptMovRec(KOptData *data, int k) {
 }
 
 double gainKOptMove(KOptData *data, int k) {
-    findPermutation(data, k);
+    findPermutation(data, data->p, data->q, k);
 
     int count = 1;
     int i = data->t[data->p[k * 2].v] != data->startNode ? 1 : k * 2;
@@ -326,29 +329,29 @@ int pCmp(const void *a, const void *b) {
     return (((PStruct *) a)->n->step - ((PStruct *) b)->n->step);
 }
 
-void findPermutation(KOptData *data, int k) {
+void findPermutation(KOptData *data, PStruct p[], int q[], int k) {
     int i, j;
     // index from 1 to be consistent with paper
     for (i = j = 1; j <= k; i += 2, j++) {
         if (data->t[i]->from == data->t[i + 1]) {
-            data->p[j].v = i + 1;
-            data->p[j].n = data->t[i + 1];
+            p[j].v = i + 1;
+            p[j].n = data->t[i + 1];
         } else {
-            data->p[j].v = i;
-            data->p[j].n = data->t[i];
+            p[j].v = i;
+            p[j].n = data->t[i];
         }
     }
     // sorts by steps in increasing order
-    qsort(data->p + 1, k, sizeof(PStruct), pCmp);
+    qsort(p + 1, k, sizeof(PStruct), pCmp);
 
     for (j = 2 * k; j >= 2; j -= 2) {
         // from always on odd positions
-        data->p[j - 1].v = i = data->p[j / 2].v;
-        data->p[j].v = (i & 1) == 1 ? (i + 1) : (i - 1);
+        p[j - 1].v = i = p[j / 2].v;
+        p[j].v = (i & 1) == 1 ? (i + 1) : (i - 1);
     }
     // q is used to lookup t_i position in p
     for (i = 1; i <= 2 * k; i++) {
-        data->q[data->p[i].v] = i;
+        q[p[i].v] = i;
     }
 }
 
