@@ -113,7 +113,7 @@ int main() {
     KOptData data;
     data.nodes = &nodes;
     data.startNode = &nodes[0];
-    data.maxK = 2;
+    data.maxK = 3;
     data.isFindMax = true;
     data.maxGain = 0;
     data.doReverse = true;
@@ -195,6 +195,12 @@ void kOptMovRec(KOptData *data, int k) {
             }
             if (!data->isFindMax && data->maxGain > E) {
                 return;
+            }
+            if (k < data->maxK) {
+                kOptMovRec(data, k + 1);
+                if (!data->isFindMax && data->maxGain > E) {
+                    return;
+                }
             }
         }
     }
