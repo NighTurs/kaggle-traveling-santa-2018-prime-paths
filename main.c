@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 
 #define NUM_CITIES 197769
 #define BUFF_SIZE 255
@@ -85,6 +86,8 @@ bool isDeleted(KOptData *data, Node *t1, Node *t2, int k);
 
 double getTourCost(Node nodes[]);
 
+void calcNewNodes(Node *t[], const int incl[], int k, int revStart, Node oldNodes[], Node newNodes[], int tour[]);
+
 void buildNodes(int const tour[], Node nodes[]);
 
 void fillPrimes();
@@ -126,6 +129,10 @@ int main() {
     printf("%.5lf\n", ((double) (end - start)) / CLOCKS_PER_SEC);
 
     printf("%.5lf\n", data.maxGain);
+
+    calcNewNodes(data.tBest, data.inclBest, data.bestK, data.bestRev, nodes, nodes, tour);
+
+    printf("%.5lf\n", getTourCost(nodes));
 
     return 0;
 }
@@ -372,6 +379,75 @@ double cummDiff(KOptData *data, Node *a, Node *b, bool forward, int inStep) {
     }
 }
 
+void calcNewNodes(Node *t[], const int incl[], int k, int revStart, Node oldNodes[], Node newNodes[], int tour[]) {
+    Node *cur = &oldNodes[0];
+    int reverse = revStart;
+    int c[k * 2 + 1];
+    memset(c, 0, sizeof(int) * (k * 2 + 1));
+    int pos = 0;
+    if (reverse) {
+        for (int i = 1; i <= k * 2; i += 2) {
+            if (t[i]->cityId == 0) {
+                if (cur->cityId != 0) {
+                    exit(SIGABRT);
+                }
+                tour[pos++] = cur->cityId;
+                if (cur->to == t[i + 1]) {
+                    cur = cur->from;
+                } else {
+                    cur = cur->to;
+                    reverse = false;
+                }
+            }
+            if (t[i + 1]->cityId == 0) {
+                if (cur->cityId != 0) {
+                    exit(SIGABRT);
+                }
+                tour[pos++] = cur->cityId;
+                if (cur->to == t[i]) {
+                    cur = cur->from;
+                } else {
+                    cur = cur->to;
+                    reverse = false;
+                }
+            }
+        }
+    }
+
+    do {
+        new_nodes_label:
+        tour[pos++] = cur->cityId;
+        for (int i = 2; i <= k * 2; i += 2) {
+            if (c[i]) {
+                continue;
+            }
+            Node *t1 = t[i];
+            Node *t2 = t[i - 1];
+            int nt = incl[i];
+            Node *t3 = t[nt];
+            Node *t4 = t[((nt - 1) ^ 1) + 1];
+            if (cur != t1 && cur != t3) {
+                continue;
+            }
+            c[i] = 1;
+            if (cur == t1) {
+                cur = t3;
+                reverse = cur->to == t4;
+            } else {
+                cur = t1;
+                reverse = cur->to == t2;
+            }
+            goto new_nodes_label;
+        }
+        if (reverse) {
+            cur = cur->from;
+        } else {
+            cur = cur->to;
+        }
+    } while (cur->cityId != 0);
+    buildNodes(tour, newNodes);
+}
+
 double getTourCost(Node nodes[]) {
     return nodes[0].cumFw[NUM_CITIES % 10];
 }
@@ -380,6 +456,9 @@ void buildNodes(int const tour[], Node nodes[]) {
     int curCity = tour[1];
     int tourPos = 2;
     int prev = 0;
+    memset(&nodes[0].cumFw, 0, sizeof(nodes[0].cumFw));
+    memset(&nodes[0].cumBack, 0, sizeof(nodes[0].cumBack));
+
     bool fullLoop = false;
     do {
         int to;
@@ -400,7 +479,7 @@ void buildNodes(int const tour[], Node nodes[]) {
         double d = distCity(curCity, prev);
         for (int m = 0; m < 10; m++) {
             double cum = prevNode->cumFw[m == 0 ? 9 : m - 1];
-            node->cumFw[m] += cum + ((m == 0 && !primes[prev]) ? d * PENALTY : d);
+            node->cumFw[m] = cum + ((m == 0 && !primes[prev]) ? d * PENALTY : d);
         }
         prev = curCity;
         curCity = to;
@@ -419,7 +498,7 @@ void buildNodes(int const tour[], Node nodes[]) {
         double d = distCity(prev, curCity);
         for (int m = 0; m < 10; m++) {
             double cum = prevNode->cumBack[m == 0 ? 9 : m - 1];
-            node->cumBack[m] += cum + ((m == 0 && !primes[prev]) ? d * PENALTY : d);
+            node->cumBack[m] = cum + ((m == 0 && !primes[prev]) ? d * PENALTY : d);
         }
         step++;
         prev = curCity;
