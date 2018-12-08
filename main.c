@@ -1,4 +1,5 @@
 #pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma ide diagnostic ignored "cert-err34-c"
 
 #include <stdio.h>
@@ -8,15 +9,16 @@
 #include <stdlib.h>
 #include <time.h>
 #include <signal.h>
+#include <limits.h>
 
 #define NUM_CITIES 197769
 #define BUFF_SIZE 255
 #define MAX_CAND 15
-#define MAX_REC 10
 #define PENALTY 1.1
 #define MAX_K 20
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
+#define SHORT_CYCLE_MAX_LENGTH 1000000
 
 
 typedef struct {
@@ -50,10 +52,6 @@ typedef struct {
     double dist[MAX_K * 2 + 1];
     PStruct p[MAX_K * 2 + 1];
     int q[MAX_K * 2 + 1];
-    PStruct recP[MAX_REC][MAX_K * 2 + 1];
-    int recQ[MAX_REC][MAX_K * 2 + 1];
-    int cycle[MAX_REC][MAX_K * 2 + 1];
-    int size[MAX_REC][MAX_K * 2 + 1];
     double maxGain;
     int maxK;
     int bestK;
@@ -75,7 +73,19 @@ void kOptStart(KOptData *data, int const order[], int orderSize);
 
 void kOptMovRec(KOptData *data, int k);
 
+void writeBestOpt(KOptData *data, double gain, int k);
+
 double gainKOptMove(KOptData *data, int k);
+
+int patchCycles(KOptData *data, int k);
+
+void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[]);
+
+int findCycle(KOptData *data, Node *N, int k, PStruct p[], int cycle[]);
+
+int shortestCycle(KOptData *data, int M, int k, PStruct p[], const int cycle[], int size[]);
+
+int countCycles(KOptData *data, PStruct p[], const int q[], int cycle[], int k);
 
 void findPermutation(KOptData *data, PStruct p[], int q[], int k);
 
@@ -116,13 +126,13 @@ int main() {
     KOptData data;
     data.nodes = &nodes;
     data.startNode = &nodes[0];
-    data.maxK = 3;
+    data.maxK = 4;
     data.isFindMax = true;
     data.maxGain = 0;
     data.doReverse = true;
-    int order[NUM_CITIES];
-    for (int i = 0; i < NUM_CITIES; i++) {
-        order[i] = i;
+    int order[NUM_CITIES - 1];
+    for (int i = 0; i < NUM_CITIES - 1; i++) {
+        order[i] = i + 1;
     }
 
     clock_t start, end;
@@ -130,7 +140,7 @@ int main() {
         double curCost = getTourCost(nodes);
         data.maxGain = 0;
         start = clock();
-        kOptStart(&data, order, NUM_CITIES);
+        kOptStart(&data, order, NUM_CITIES - 1);
         end = clock();
         calcNewNodes(data.tBest, data.inclBest, data.bestK, data.bestRev, nodes, nodes, tour);
         double newCost = getTourCost(nodes);
@@ -150,6 +160,9 @@ void kOptStart(KOptData *data, int const order[], int orderSize) {
         Node *t1 = &(*data->nodes)[order[i]];
         for (int x1 = 0; x1 < 2; x1++) {
             Node *t2 = x1 == 0 ? t1->from : t1->to;
+            if (t2->cityId == 0) {
+                continue;
+            }
             data->t[1] = t1;
             data->t[2] = t2;
             data->minT = t1->cityId;
@@ -190,15 +203,20 @@ void kOptMovRec(KOptData *data, int k) {
             double gain = gainKOptMove(data, k);
 
             if (gain > data->maxGain) {
-                data->maxGain = gain;
-                memcpy(data->tBest + 1, data->t + 1, 2 * k * sizeof(Node *));
-                memcpy(data->inclBest + 1, data->incl + 1, 2 * k * sizeof(int));
-                data->bestK = k;
-                data->bestRev = data->incl[0];
+                writeBestOpt(data, gain, k);
             }
             if (!data->isFindMax && data->maxGain > E) {
                 return;
             }
+            if (gain == ILLEGAL_OPT) {
+                if (k + 2 <= data->maxK && t4 != t1) {
+                    patchCycles(data, k);
+                    if (!data->isFindMax && data->maxGain > E) {
+                        return;
+                    }
+                }
+            }
+
             if (k < data->maxK) {
                 kOptMovRec(data, k + 1);
                 if (!data->isFindMax && data->maxGain > E) {
@@ -209,13 +227,180 @@ void kOptMovRec(KOptData *data, int k) {
     }
 }
 
+int patchCycles(KOptData *data, int k) {
+    PStruct p[k * 2 + 1];
+    int q[k * 2 + 1];
+    int cycle[k * 2 + 1];
+    int size[k * 2 + 1];
+    findPermutation(data, p, q, k);
+
+    int M, i;
+    Node *s2;
+
+    M = countCycles(data, p, q, cycle, k);
+
+    if (data->maxK < k + M) {
+        return M;
+    }
+    int curCycle = shortestCycle(data, M, k, p, cycle, size);
+    if (SHORT_CYCLE_MAX_LENGTH < size[curCycle]) {
+        return M;
+    }
+    for (i = 0; i < k; i++) {
+        if (cycle[p[2 * i].v] != curCycle) {
+            continue;
+        }
+        Node *sStart = data->t[p[2 * i].v];
+        Node *sStop = data->t[p[2 * i + 1].v];
+        for (Node *s1 = sStart; s1 != sStop; s1 = s2) {
+            s2 = s1->to;
+            if (s1->cityId < data->minT || s2->cityId < data->minT) {
+                continue;
+            }
+            data->t[2 * k + 1] = s1;
+            data->t[2 * k + 2] = s2;
+
+            patchCyclesRec(data, k, 2, M, curCycle, p, cycle);
+            if (!data->isFindMax && data->maxGain > E) {
+                return M;
+            }
+        }
+    }
+}
+
+void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[]) {
+    Node **t = data->t;
+    int *incl = data->incl;
+    double *dist = data->dist;
+    double d;
+    int newCycle, i;
+    int cycleAdj[1 + 2 * k];
+    Node *s1 = t[2 * k + 1];
+    Node *s2 = t[i = 2 * (k + m) - 2];
+    incl[incl[i] = i + 1] = i;
+    for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
+        Cand *s3Cand = &(candidates[s2->cityId][x3]);
+        Node *s3 = &(*data->nodes)[s3Cand->city];
+        if (s3->cityId < data->minT || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)
+            || (newCycle = findCycle(data, s3, k, p, cycle)) == curCycle) {
+            continue;
+        }
+        t[2 * (k + m) - 1] = s3;
+        dist[2 * (k + m) - 2] = s3Cand->dist;
+        dist[2 * (k + m) - 1] = s3Cand->dist;
+        for (int x4 = 0; x4 < 2; x4++) {
+            Node *s4 = x4 == 0 ? s3->from : s3->to;
+            if (s4->cityId < data->minT || isDeleted(data, s3, s4, k)) {
+                continue;
+            }
+            t[2 * (k + m)] = s4;
+            if (M > 2) {
+                for (i = 1; i <= 2 * k; i++) {
+                    cycleAdj[i] = cycle[i] == newCycle ? curCycle : cycle[i];
+                }
+                patchCyclesRec(data, k, m + 1, M - 1, curCycle, p, cycleAdj);
+                if (!data->isFindMax && data->maxGain > E) {
+                    return;
+                }
+                if (s4 == s1) {
+                    continue;
+                }
+                incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
+                patchCycles(data, k + m);
+                if (!data->isFindMax && data->maxGain > E) {
+                    return;
+                }
+            } else if (s4 != s1) {
+                incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
+                d = distCity(s4->cityId, s1->cityId);
+                dist[2 * k + 1] = d;
+                dist[2 * (k + m)] = d;
+                double gain = gainKOptMove(data, k + m);
+                if (gain > data->maxGain) {
+                    writeBestOpt(data, gain, k + m);
+                }
+                if (!data->isFindMax && data->maxGain > E) {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void writeBestOpt(KOptData *data, double gain, int k) {
+    data->maxGain = gain;
+    memcpy(data->tBest + 1, data->t + 1, 2 * k * sizeof(Node *));
+    memcpy(data->inclBest + 1, data->incl + 1, 2 * k * sizeof(int));
+    data->bestK = k;
+    data->bestRev = data->incl[0];
+}
+
+bool isBetween(Node *a, Node *b, Node *c) {
+    return b->step <= c->step && b->step >= a->step;
+}
+
+int findCycle(KOptData *data, Node *N, int k, PStruct p[], int cycle[]) {
+    /* Binary search */
+    int low = 1, high = k;
+    while (low < high) {
+        int mid = (low + high) / 2;
+        if (isBetween(data->t[p[2 * low].v], N, data->t[p[2 * mid + 1].v])) {
+            high = mid;
+        } else {
+            low = mid + 1;
+        }
+    }
+    return cycle[p[2 * low].v];
+}
+
+int countCycles(KOptData *data, PStruct p[], const int q[], int cycle[], int k) {
+    int i, j, count = 0;
+
+    for (i = 1; i <= 2 * k; i++) {
+        cycle[i] = 0;
+    }
+    for (i = 1; i <= 2 * k; i++) {
+        if (cycle[p[i].v] == 0) {
+            count++;
+            j = i;
+            do {
+                cycle[p[j].v] = count;
+                j = q[data->incl[p[j].v]];
+                cycle[p[j].v] = count;
+                if ((j ^= 1) > 2 * k) {
+                    j = 1;
+                }
+            } while (j != i);
+        }
+    }
+    return count;
+}
+
+int shortestCycle(KOptData *data, int M, int k, PStruct p[], const int cycle[], int size[]) {
+    int i, minCycle = -1, minSize = INT_MAX;
+    for (i = 1; i <= M; i++) {
+        size[i] = 0;
+    }
+    p[0].v = p[2 * k].v;
+    for (i = 0; i < 2 * k; i += 2) {
+        size[cycle[p[i].v]] += abs(data->t[p[i].v]->step - data->t[p[i + 1].v]->step) + 1;
+    }
+    for (i = 1; i <= M; i++) {
+        if (size[i] < minSize) {
+            minSize = size[i];
+            minCycle = i;
+        }
+    }
+    return minCycle;
+}
+
 double gainKOptMove(KOptData *data, int k) {
     findPermutation(data, data->p, data->q, k);
 
     int count = 1;
-    int i = data->t[data->p[k * 2].v] != data->startNode ? 1 : k * 2;
+    int i = 1;
     int startI = i;
-    int endI = i == k * 2 ? 1 : k * 2;
+    int endI = k * 2;
     Node *prev = data->startNode;
     Node *cur = data->t[data->p[i].v];
     double cost = 0;
@@ -254,13 +439,10 @@ double gainKOptMove(KOptData *data, int k) {
         return forwardGain;
     }
 
-    if (data->t[data->p[k * 2].v] == data->startNode) {
-        i = 1;
-    } else {
-        i = k * 2;
-    }
+
+    i = k * 2;
     startI = i;
-    endI = i == k * 2 ? 1 : k * 2;
+    endI = 1;
     cur = data->t[data->p[i].v];
     cost = 0;
     step = 0;
@@ -270,11 +452,7 @@ double gainKOptMove(KOptData *data, int k) {
             cost += cummDiff(data, prev, cur, forward, step);
         }
         if (step == 0) {
-            if (startI == 1) {
-                step += cur->step;
-            } else {
-                step += cur->backStep;
-            }
+            step += cur->backStep;
         } else {
             step += abs(prev->backStep - cur->backStep) + 1;
         }
@@ -399,35 +577,6 @@ void calcNewNodes(Node *t[], const int incl[], int k, int revStart, Node oldNode
     int c[k * 2 + 1];
     memset(c, 0, sizeof(int) * (k * 2 + 1));
     int pos = 0;
-    if (reverse) {
-        for (int i = 1; i <= k * 2; i += 2) {
-            if (t[i]->cityId == 0) {
-                if (cur->cityId != 0) {
-                    exit(SIGABRT);
-                }
-                tour[pos++] = cur->cityId;
-                if (cur->to == t[i + 1]) {
-                    cur = cur->from;
-                } else {
-                    cur = cur->to;
-                    reverse = false;
-                }
-            }
-            if (t[i + 1]->cityId == 0) {
-                if (cur->cityId != 0) {
-                    exit(SIGABRT);
-                }
-                tour[pos++] = cur->cityId;
-                if (cur->to == t[i]) {
-                    cur = cur->from;
-                } else {
-                    cur = cur->to;
-                    reverse = false;
-                }
-            }
-        }
-    }
-
     do {
         new_nodes_label:
         tour[pos++] = cur->cityId;
