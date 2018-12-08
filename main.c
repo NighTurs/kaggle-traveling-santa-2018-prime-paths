@@ -60,6 +60,7 @@ typedef struct {
     int maxK;
     int bestK;
     int bestRev;
+    int bestCycle;
     int minT;
     bool doReverse;
     bool isFindMax;
@@ -79,13 +80,13 @@ void *kOptStart(void *arg);
 
 void kOptMovRec(KOptData *data, int k);
 
-void writeBestOpt(KOptData *data, double gain, int k);
+void writeBestOpt(KOptData *data, double gain, int k, int cycle);
 
 double gainKOptMove(KOptData *data, int k);
 
 int patchCycles(KOptData *data, int k);
 
-void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[]);
+void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[]);
 
 int findCycle(KOptData *data, Node *N, int k, PStruct p[], int cycle[]);
 
@@ -191,12 +192,13 @@ void improveTour(int nThreads, const char subFile[]) {
 
         calcNewNodes(curData->tBest, curData->inclBest, curData->bestK, curData->bestRev, nodes, nodes, tour);
         double newCost = getTourCost(nodes);
-        printf("Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d\n",
+        printf("Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d\n",
                end.tv_sec - start.tv_sec,
                curData->maxGain,
                curCost - newCost - curData->maxGain,
                newCost,
-               curData->bestK
+               curData->bestK,
+               curData->bestCycle
         );
         fflush(stdout);
         writeSubmission(subFile, nodes);
@@ -264,7 +266,7 @@ void kOptMovRec(KOptData *data, int k) {
             double gain = gainKOptMove(data, k);
 
             if (gain > data->maxGain) {
-                writeBestOpt(data, gain, k);
+                writeBestOpt(data, gain, k, 0);
             }
             if (!isFindMax && data->maxGain > E) {
                 return;
@@ -307,6 +309,7 @@ int patchCycles(KOptData *data, int k) {
     if (SHORT_CYCLE_MAX_LENGTH < size[curCycle]) {
         return M;
     }
+
     for (i = 0; i < k; i++) {
         if (cycle[p[2 * i].v] != curCycle) {
             continue;
@@ -321,7 +324,7 @@ int patchCycles(KOptData *data, int k) {
             data->t[2 * k + 1] = s1;
             data->t[2 * k + 2] = s2;
 
-            patchCyclesRec(data, k, 2, M, curCycle, p, cycle);
+            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
             if (!data->isFindMax && data->maxGain > E) {
                 return M;
             }
@@ -329,7 +332,7 @@ int patchCycles(KOptData *data, int k) {
     }
 }
 
-void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[]) {
+void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[]) {
     Node **t = data->t;
     int *incl = data->incl;
     double *dist = data->dist;
@@ -360,7 +363,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 for (i = 1; i <= 2 * k; i++) {
                     cycleAdj[i] = cycle[i] == newCycle ? curCycle : cycle[i];
                 }
-                patchCyclesRec(data, k, m + 1, M - 1, curCycle, p, cycleAdj);
+                patchCyclesRec(data, k, m + 1, M - 1, curCycle, p, cycleAdj, size);
                 if (!data->isFindMax && data->maxGain > E) {
                     return;
                 }
@@ -380,7 +383,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 dist[2 * (k + m)] = d;
                 double gain = gainKOptMove(data, k + m);
                 if (gain > data->maxGain) {
-                    writeBestOpt(data, gain, k + m);
+                    writeBestOpt(data, gain, k + m, size[curCycle]);
                 }
                 if (!data->isFindMax && data->maxGain > E) {
                     return;
@@ -433,7 +436,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                     dist[2 * (k + m) + 2] = d;
                     double gain = gainKOptMove(data, k + m + 1);
                     if (gain > data->maxGain) {
-                        writeBestOpt(data, gain, k + m + 1);
+                        writeBestOpt(data, gain, k + m + 1, size[curCycle]);
                     }
                     if (!data->isFindMax && data->maxGain > E) {
                         return;
@@ -444,12 +447,13 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
     }
 }
 
-void writeBestOpt(KOptData *data, double gain, int k) {
+void writeBestOpt(KOptData *data, double gain, int k, int cycle) {
     data->maxGain = gain;
     memcpy(data->tBest + 1, data->t + 1, 2 * k * sizeof(Node *));
     memcpy(data->inclBest + 1, data->incl + 1, 2 * k * sizeof(int));
     data->bestK = k;
     data->bestRev = data->incl[0];
+    data->bestCycle = cycle;
 }
 
 bool isBetween(Node *a, Node *b, Node *c) {
