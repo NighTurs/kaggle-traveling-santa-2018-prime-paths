@@ -43,7 +43,7 @@ typedef struct {
 } PStruct;
 
 typedef struct {
-    Node (*nodes)[];
+    Node *nodes;
     Node *startNode;
     Node *t[MAX_K * 2 + 1];
     Node *tBest[MAX_K * 2 + 1];
@@ -124,7 +124,7 @@ int main() {
     printf("%.5lf\n", getTourCost(nodes));
 
     KOptData data;
-    data.nodes = &nodes;
+    data.nodes = nodes;
     data.startNode = &nodes[0];
     data.maxK = 4;
     data.isFindMax = true;
@@ -158,7 +158,7 @@ int main() {
 void kOptStart(KOptData *data, int const order[], int orderSize) {
     Node **t = data->t;
     for (int i = 0; i < orderSize; i++) {
-        Node *t1 = &(*data->nodes)[order[i]];
+        Node *t1 = &data->nodes[order[i]];
         for (int x1 = 0; x1 < 2; x1++) {
             Node *t2 = x1 == 0 ? t1->from : t1->to;
             if (t2->cityId == 0) {
@@ -179,7 +179,7 @@ void kOptMovRec(KOptData *data, int k) {
     Node **t = data->t;
     int *incl = data->incl;
     double *dist = data->dist;
-    Node *nodes = *data->nodes;
+    Node *nodes = data->nodes;
     int minT = data->minT;
     bool isFindMax = data->isFindMax;
     int maxK = data->maxK;
@@ -288,7 +288,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
     incl[incl[i] = i + 1] = i;
     for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
         Cand *s3Cand = &(candidates[s2->cityId][x3]);
-        Node *s3 = &(*data->nodes)[s3Cand->city];
+        Node *s3 = &data->nodes[s3Cand->city];
         if (s3->cityId < data->minT || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)
             || (newCycle = findCycle(data, s3, k, p, cycle)) == curCycle) {
             continue;
@@ -446,7 +446,7 @@ double gainKOptMove(KOptData *data, int k) {
     }
 
     double forwardGain =
-            getTourCost(*data->nodes) - cost -
+            getTourCost(data->nodes) - cost -
             cummDiff(data, t[p[endI].v], t[p[startI].v], forward, step);
 
     if (!data->doReverse) {
@@ -487,7 +487,7 @@ double gainKOptMove(KOptData *data, int k) {
     } while (true);
 
     double backwardGain =
-            getTourCost(*data->nodes) - cost -
+            getTourCost(data->nodes) - cost -
             cummDiff(data, t[p[endI].v], t[p[startI].v], forward, step);
 
     if (forwardGain > backwardGain) {
