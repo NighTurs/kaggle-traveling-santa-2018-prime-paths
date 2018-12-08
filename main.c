@@ -160,7 +160,7 @@ void kOptStart(KOptData *data, int const order[], int orderSize) {
     for (int i = 0; i < orderSize; i++) {
         Node *t1 = &data->nodes[order[i]];
         for (int x1 = 0; x1 < 2; x1++) {
-            Node *t2 = x1 == 0 ? t1->from : t1->to;
+            Node *t2 = x1 == 0 ?  t1->to : t1->from;
             if (t2->cityId == 0) {
                 continue;
             }
@@ -198,7 +198,7 @@ void kOptMovRec(KOptData *data, int k) {
         dist[2 * k - 1] = t3Cand->dist;
         dist[2 * k - 2] = t3Cand->dist;
         for (int x4 = 0; x4 < 2; x4++) {
-            Node *t4 = x4 == 0 ? t3->from : t3->to;
+            Node *t4 = x4 == 0 ? t3->to : t3->from;
             if (t4->cityId < minT || isDeleted(data, t3, t4, k - 2)) {
                 continue;
             }
@@ -297,11 +297,12 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         dist[2 * (k + m) - 2] = s3Cand->dist;
         dist[2 * (k + m) - 1] = s3Cand->dist;
         for (int x4 = 0; x4 < 2; x4++) {
-            Node *s4 = x4 == 0 ? s3->from : s3->to;
+            Node *s4 = x4 == 0 ?  s3->to : s3->from;
             if (s4->cityId < data->minT || isDeleted(data, s3, s4, k)) {
                 continue;
             }
             t[2 * (k + m)] = s4;
+            d = distCity(s4->cityId, s1->cityId);
             if (M > 2) {
                 for (i = 1; i <= 2 * k; i++) {
                     cycleAdj[i] = cycle[i] == newCycle ? curCycle : cycle[i];
@@ -314,13 +315,14 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                     continue;
                 }
                 incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
+                dist[2 * k + 1] = d;
+                dist[2 * (k + m)] = d;
                 patchCycles(data, k + m);
                 if (!data->isFindMax && data->maxGain > E) {
                     return;
                 }
             } else if (s4 != s1) {
                 incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
-                d = distCity(s4->cityId, s1->cityId);
                 dist[2 * k + 1] = d;
                 dist[2 * (k + m)] = d;
                 double gain = gainKOptMove(data, k + m);
@@ -329,6 +331,60 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 }
                 if (!data->isFindMax && data->maxGain > E) {
                     return;
+                }
+            }
+        }
+    }
+
+    if (M != 2 || data->maxK < k + m + 1) {
+        return;
+    }
+
+    for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
+        Cand *s3Cand = &(candidates[s2->cityId][x3]);
+        Node *s3 = &data->nodes[s3Cand->city];
+        if (s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)) {
+            continue;
+        }
+        t[2 * (k + m) - 1] = s3;
+        dist[2 * (k + m) - 2] = s3Cand->dist;
+        dist[2 * (k + m) - 1] = s3Cand->dist;
+        for (int x4 = 0; x4 < 2; x4++) {
+            Node *s4 = x4 == 0 ? s3->to : s3->from;
+            if (isDeleted(data, s3, s4, k)) {
+                continue;
+            }
+            t[2 * (k + m)] = s4;
+
+            for (int x5 = 1; x5 <= CAND_SIZE(s4->cityId); x5++) {
+                Cand *s5Cand = &(candidates[s4->cityId][x5]);
+                Node *s5 = &data->nodes[s5Cand->city];
+                if (s5 == s4->from || s5 == s4->to || isAdded(data, s4, s5, k) ||
+                    (newCycle = findCycle(data, s5, k, p, cycle)) == curCycle) {
+                    continue;
+                }
+
+                t[2 * (k + m) + 1] = s5;
+                incl[incl[2 * (k + m)] = 2 * (k + m) + 1] = 2 * (k + m);
+                dist[2 * (k + m)] = s5Cand->dist;
+                dist[2 * (k + m) + 1] = s5Cand->dist;
+                for (int x6 = 0; x6 < 2; x6++) {
+                    Node *s6 = x6 == 0 ? s5->to : s5->from;
+                    if (isDeleted(data, s5, s6, k) || isAdded(data, s6, s1, k)) {
+                        continue;
+                    }
+                    t[2 * (k + m) + 2] = s6;
+                    incl[incl[2 * k + 1] = 2 * (k + m) + 2] = 2 * k + 1;
+                    d = distCity(s6->cityId, s1->cityId);
+                    dist[2 * k + 1] = d;
+                    dist[2 * (k + m) + 2] = d;
+                    double gain = gainKOptMove(data, k + m + 1);
+                    if (gain > data->maxGain) {
+                        writeBestOpt(data, gain, k + m + 1);
+                    }
+                    if (!data->isFindMax && data->maxGain > E) {
+                        return;
+                    }
                 }
             }
         }
