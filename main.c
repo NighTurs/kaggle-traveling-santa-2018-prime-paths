@@ -191,11 +191,12 @@ void improveTour(int nThreads, const char subFile[]) {
 
         calcNewNodes(curData->tBest, curData->inclBest, curData->bestK, curData->bestRev, nodes, nodes, tour);
         double newCost = getTourCost(nodes);
-        printf("Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf\n",
+        printf("Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d\n",
                end.tv_sec - start.tv_sec,
                curData->maxGain,
                curCost - newCost - curData->maxGain,
-               newCost
+               newCost,
+               curData->bestK
         );
         fflush(stdout);
         writeSubmission(subFile, nodes);
