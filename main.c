@@ -160,7 +160,7 @@ void improveTour(int nThreads, const char subFile[]) {
         datas[i]->nodes = nodes;
         datas[i]->startNode = &nodes[0];
         datas[i]->isFindMax = true;
-        datas[i]->doReverse = true;
+        datas[i]->doReverse = false;
     }
 
     KOptData *curData;
@@ -197,6 +197,7 @@ void improveTour(int nThreads, const char subFile[]) {
                curCost - newCost - curData->maxGain,
                newCost
         );
+        fflush(stdout);
         writeSubmission(subFile, nodes);
     } while (true);
 
