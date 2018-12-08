@@ -19,7 +19,7 @@
 #define MAX_K 20
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
-#define SHORT_CYCLE_MAX_LENGTH 1000000
+#define SHORT_CYCLE_MAX_LENGTH 200
 
 
 typedef struct {
@@ -305,7 +305,7 @@ int patchCycles(KOptData *data, int k) {
         Node *sStop = data->t[p[2 * i + 1].v];
         for (Node *s1 = sStart; s1 != sStop; s1 = s2) {
             s2 = s1->to;
-            if (s1->cityId < data->minT || s2->cityId < data->minT) {
+            if (s1->cityId == 0 || s2->cityId == 0) {
                 continue;
             }
             data->t[2 * k + 1] = s1;
@@ -332,7 +332,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
     for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
         Cand *s3Cand = &(candidates[s2->cityId][x3]);
         Node *s3 = &data->nodes[s3Cand->city];
-        if (s3->cityId < data->minT || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)
+        if (s3->cityId == 0 || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)
             || (newCycle = findCycle(data, s3, k, p, cycle)) == curCycle) {
             continue;
         }
@@ -341,7 +341,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         dist[2 * (k + m) - 1] = s3Cand->dist;
         for (int x4 = 0; x4 < 2; x4++) {
             Node *s4 = x4 == 0 ? s3->to : s3->from;
-            if (s4->cityId < data->minT || isDeleted(data, s3, s4, k)) {
+            if (s4->cityId == 0 || isDeleted(data, s3, s4, k)) {
                 continue;
             }
             t[2 * (k + m)] = s4;
@@ -386,7 +386,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
     for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
         Cand *s3Cand = &(candidates[s2->cityId][x3]);
         Node *s3 = &data->nodes[s3Cand->city];
-        if (s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)) {
+        if (s3->cityId == 0 || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)) {
             continue;
         }
         t[2 * (k + m) - 1] = s3;
@@ -394,7 +394,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         dist[2 * (k + m) - 1] = s3Cand->dist;
         for (int x4 = 0; x4 < 2; x4++) {
             Node *s4 = x4 == 0 ? s3->to : s3->from;
-            if (isDeleted(data, s3, s4, k)) {
+            if (s4->cityId == 0 || isDeleted(data, s3, s4, k)) {
                 continue;
             }
             t[2 * (k + m)] = s4;
@@ -402,7 +402,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
             for (int x5 = 1; x5 <= CAND_SIZE(s4->cityId); x5++) {
                 Cand *s5Cand = &(candidates[s4->cityId][x5]);
                 Node *s5 = &data->nodes[s5Cand->city];
-                if (s5 == s4->from || s5 == s4->to || isAdded(data, s4, s5, k) ||
+                if (s5->cityId == 0 || s5 == s4->from || s5 == s4->to || isAdded(data, s4, s5, k) ||
                     (newCycle = findCycle(data, s5, k, p, cycle)) == curCycle) {
                     continue;
                 }
@@ -413,7 +413,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 dist[2 * (k + m) + 1] = s5Cand->dist;
                 for (int x6 = 0; x6 < 2; x6++) {
                     Node *s6 = x6 == 0 ? s5->to : s5->from;
-                    if (isDeleted(data, s5, s6, k) || isAdded(data, s6, s1, k)) {
+                    if (s6->cityId == 0 || isDeleted(data, s5, s6, k) || isAdded(data, s6, s1, k)) {
                         continue;
                     }
                     t[2 * (k + m) + 2] = s6;
