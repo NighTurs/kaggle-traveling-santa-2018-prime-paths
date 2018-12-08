@@ -14,6 +14,7 @@
 
 #define NUM_CITIES 197769
 #define BUFF_SIZE 255
+#define WRITE_BUFF_SIZE 4096
 #define MAX_CAND 15
 #define PENALTY 1.1
 #define MAX_K 20
@@ -72,7 +73,7 @@ Node nodes[NUM_CITIES];
 Cand candidates[NUM_CITIES][MAX_CAND + 1];
 #define CAND_SIZE(x) (candidates[x][0].city)
 
-void improveTour(int nThreads);
+void improveTour(int nThreads, const char subFile[]);
 
 void *kOptStart(void *arg);
 
@@ -116,6 +117,8 @@ void readTourLinkern(const char fileName[], int tour[]);
 
 void readTourSubmission(const char fileName[], int tour[]);
 
+void writeSubmission(const char fileName[], Node nodes[]);
+
 void buildCandidates(const char fileName[], int const tour[]);
 
 double dist(double x1, double y1, double x2, double y2);
@@ -124,7 +127,7 @@ double distCity(int a, int b);
 
 void shuffle(int *array, size_t n);
 
-//args: original_tour, submission, num_threads
+//args: original_tour, submission_in, submission_out, num_threads
 int main(int argc, char **argv) {
     srand(1234);
     readCities("cities.csv");
@@ -134,11 +137,11 @@ int main(int argc, char **argv) {
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
-    improveTour(atoi(argv[3]));
+    improveTour(atoi(argv[4]), argv[3]);
     return 0;
 }
 
-void improveTour(int nThreads) {
+void improveTour(int nThreads, const char subFile[]) {
     struct timeval start, end;
     pthread_t thread_id[nThreads];
     KOptData *datas[nThreads];
@@ -194,6 +197,7 @@ void improveTour(int nThreads) {
                curCost - newCost - curData->maxGain,
                newCost
         );
+        writeSubmission(subFile, nodes);
     } while (true);
 
     for (int i = 0; i < nThreads; i++) {
@@ -904,6 +908,30 @@ void readTourSubmission(const char fileName[], int tour[]) {
         if (i < NUM_CITIES) {
             tour[i++] = city;
         }
+    }
+    fclose(fp);
+}
+
+void writeSubmission(const char fileName[], Node nodes[]) {
+    FILE *fp = fopen(fileName, "w");
+    char file_buffer[WRITE_BUFF_SIZE + 64];
+    int buffer_count = 0;
+
+    Node *node = &nodes[0];
+    buffer_count += sprintf(&file_buffer[buffer_count], "Path\n");
+    do {
+        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", node->cityId);
+        node = node->to;
+        if (buffer_count >= WRITE_BUFF_SIZE) {
+            fwrite(file_buffer, WRITE_BUFF_SIZE, 1, fp);
+            buffer_count -= WRITE_BUFF_SIZE;
+            memcpy(file_buffer, &file_buffer[WRITE_BUFF_SIZE], buffer_count);
+        }
+    } while (node->cityId != 0);
+    buffer_count += sprintf(&file_buffer[buffer_count], "0");
+
+    if (buffer_count > 0) {
+        fwrite(file_buffer, 1, buffer_count, fp);
     }
     fclose(fp);
 }
