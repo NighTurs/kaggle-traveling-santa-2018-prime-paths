@@ -19,7 +19,7 @@
 #define MAX_K 20
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
-#define SHORT_CYCLE_MAX_LENGTH 200
+#define SHORT_CYCLE_MAX_LENGTH 1000
 
 
 typedef struct {
@@ -114,6 +114,8 @@ void readCities(const char fileName[]);
 
 void readTourLinkern(const char fileName[], int tour[]);
 
+void readTourSubmission(const char fileName[], int tour[]);
+
 void buildCandidates(const char fileName[], int const tour[]);
 
 double dist(double x1, double y1, double x2, double y2);
@@ -122,15 +124,17 @@ double distCity(int a, int b);
 
 void shuffle(int *array, size_t n);
 
+//args: original_tour, submission, num_threads
 int main(int argc, char **argv) {
     srand(1234);
     readCities("cities.csv");
-    readTourLinkern("out6.proc", tour);
+    readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
+    readTourSubmission(argv[2], tour);
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
-    improveTour(atoi(argv[1]));
+    improveTour(atoi(argv[3]));
     return 0;
 }
 
@@ -163,7 +167,7 @@ void improveTour(int nThreads) {
         double curCost = getTourCost(nodes);
         for (int i = 0; i < nThreads; i++) {
             curData = datas[i];
-            curData->maxK = 4;
+            curData->maxK = 5;
             curData->maxGain = 0;
             pthread_create(&thread_id[i], NULL, kOptStart, (void *) curData);
         }
@@ -883,6 +887,23 @@ void readTourLinkern(const char fileName[], int tour[]) {
     while (fgets(buff, BUFF_SIZE, fp)) {
         sscanf(buff, "%d %d %d", &cityA, &cityB, &dist);
         tour[i++] = cityA;
+    }
+    fclose(fp);
+}
+
+void readTourSubmission(const char fileName[], int tour[]) {
+    FILE *fp;
+    char buff[BUFF_SIZE];
+    int city;
+
+    fp = fopen(fileName, "r");
+    int i = 0;
+    fgets(buff, BUFF_SIZE, fp);
+    while (fgets(buff, BUFF_SIZE, fp)) {
+        sscanf(buff, "%d", &city);
+        if (i < NUM_CITIES) {
+            tour[i++] = city;
+        }
     }
     fclose(fp);
 }
