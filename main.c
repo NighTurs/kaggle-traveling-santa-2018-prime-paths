@@ -156,6 +156,7 @@ int main() {
 }
 
 void kOptStart(KOptData *data, int const order[], int orderSize) {
+    Node **t = data->t;
     for (int i = 0; i < orderSize; i++) {
         Node *t1 = &(*data->nodes)[order[i]];
         for (int x1 = 0; x1 < 2; x1++) {
@@ -163,8 +164,8 @@ void kOptStart(KOptData *data, int const order[], int orderSize) {
             if (t2->cityId == 0) {
                 continue;
             }
-            data->t[1] = t1;
-            data->t[2] = t2;
+            t[1] = t1;
+            t[2] = t2;
             data->minT = t1->cityId;
             kOptMovRec(data, 2);
             if (!data->isFindMax && data->maxGain > E) {
@@ -175,41 +176,48 @@ void kOptStart(KOptData *data, int const order[], int orderSize) {
 }
 
 void kOptMovRec(KOptData *data, int k) {
-    Node *t1 = data->t[1];
-    Node *t2 = data->t[2 * k - 2];
+    Node **t = data->t;
+    int *incl = data->incl;
+    double *dist = data->dist;
+    Node *nodes = *data->nodes;
+    int minT = data->minT;
+    bool isFindMax = data->isFindMax;
+    int maxK = data->maxK;
+    Node *t1 = t[1];
+    Node *t2 = t[2 * k - 2];
     double d;
     for (int x3 = 1; x3 <= CAND_SIZE(t2->cityId); x3++) {
         Cand *t3Cand = &(candidates[t2->cityId][x3]);
-        Node *t3 = &(*data->nodes)[t3Cand->city];
-        if (t3->cityId < data->minT || t3 == t2->from || t3 == t2->to || isAdded(data, t2, t3, k - 2)) {
+        Node *t3 = &nodes[t3Cand->city];
+        if (t3->cityId < minT || t3 == t2->from || t3 == t2->to || isAdded(data, t2, t3, k - 2)) {
             continue;
         }
-        data->t[2 * k - 1] = t3;
-        data->incl[2 * k - 1] = 2 * k - 2;
-        data->incl[2 * k - 2] = 2 * k - 1;
-        data->dist[2 * k - 1] = t3Cand->dist;
-        data->dist[2 * k - 2] = t3Cand->dist;
+        t[2 * k - 1] = t3;
+        incl[2 * k - 1] = 2 * k - 2;
+        incl[2 * k - 2] = 2 * k - 1;
+        dist[2 * k - 1] = t3Cand->dist;
+        dist[2 * k - 2] = t3Cand->dist;
         for (int x4 = 0; x4 < 2; x4++) {
             Node *t4 = x4 == 0 ? t3->from : t3->to;
-            if (t4->cityId < data->minT || isDeleted(data, t3, t4, k - 2)) {
+            if (t4->cityId < minT || isDeleted(data, t3, t4, k - 2)) {
                 continue;
             }
-            data->t[2 * k] = t4;
-            data->incl[1] = 2 * k;
-            data->incl[2 * k] = 1;
+            t[2 * k] = t4;
+            incl[1] = 2 * k;
+            incl[2 * k] = 1;
             d = distCity(t1->cityId, t4->cityId);
-            data->dist[1] = d;
-            data->dist[2 * k] = d;
+            dist[1] = d;
+            dist[2 * k] = d;
             double gain = gainKOptMove(data, k);
 
             if (gain > data->maxGain) {
                 writeBestOpt(data, gain, k);
             }
-            if (!data->isFindMax && data->maxGain > E) {
+            if (!isFindMax && data->maxGain > E) {
                 return;
             }
             if (gain == ILLEGAL_OPT) {
-                if (k + 2 <= data->maxK && t4 != t1) {
+                if (k + 2 <= maxK && t4 != t1) {
                     patchCycles(data, k);
                     if (!data->isFindMax && data->maxGain > E) {
                         return;
@@ -217,9 +225,9 @@ void kOptMovRec(KOptData *data, int k) {
                 }
             }
 
-            if (k < data->maxK) {
+            if (k < maxK) {
                 kOptMovRec(data, k + 1);
-                if (!data->isFindMax && data->maxGain > E) {
+                if (!isFindMax && data->maxGain > E) {
                     return;
                 }
             }
@@ -395,28 +403,35 @@ int shortestCycle(KOptData *data, int M, int k, PStruct p[], const int cycle[], 
 }
 
 double gainKOptMove(KOptData *data, int k) {
-    findPermutation(data, data->p, data->q, k);
+    Node **t = data->t;
+    int *incl = data->incl;
+    double *dist = data->dist;
+    PStruct *p = data->p;
+    int *q = data->q;
+    Node *startNode = data->startNode;
+
+    findPermutation(data, p, q, k);
 
     int count = 1;
     int i = 1;
     int startI = i;
     int endI = k * 2;
-    Node *prev = data->startNode;
-    Node *cur = data->t[data->p[i].v];
+    Node *prev = startNode;
+    Node *cur = t[p[i].v];
     double cost = 0;
     int step = 0;
     bool forward = true;
 
     do {
-        if (prev != data->startNode) {
+        if (prev != startNode) {
             cost += cummDiff(data, prev, cur, forward, step);
         }
         step += abs(prev->step - cur->step) + 1;
-        int nextT = data->incl[data->p[i].v];
-        Node *next = data->t[nextT];
-        cost += data->dist[nextT] * calcPenalty(cur, step);
+        int nextT = incl[p[i].v];
+        Node *next = t[nextT];
+        cost += dist[nextT] * calcPenalty(cur, step);
         prev = next;
-        i = data->q[nextT];
+        i = q[nextT];
         forward = (i & 1) == 0;
         // odd -> -=1 even -> +=1
         i = i ^ 1;
@@ -424,7 +439,7 @@ double gainKOptMove(KOptData *data, int k) {
             break;
         }
         count++;
-        cur = data->t[data->p[i].v];
+        cur = t[p[i].v];
     } while (true);
     if (count != k) {
         return ILLEGAL_OPT;
@@ -432,10 +447,10 @@ double gainKOptMove(KOptData *data, int k) {
 
     double forwardGain =
             getTourCost(*data->nodes) - cost -
-            cummDiff(data, data->t[data->p[endI].v], data->t[data->p[startI].v], forward, step);
+            cummDiff(data, t[p[endI].v], t[p[startI].v], forward, step);
 
     if (!data->doReverse) {
-        data->incl[0] = 0;
+        incl[0] = 0;
         return forwardGain;
     }
 
@@ -443,10 +458,10 @@ double gainKOptMove(KOptData *data, int k) {
     i = k * 2;
     startI = i;
     endI = 1;
-    cur = data->t[data->p[i].v];
+    cur = t[p[i].v];
     cost = 0;
     step = 0;
-    prev = data->startNode;
+    prev = startNode;
     do {
         if (step != 0) {
             cost += cummDiff(data, prev, cur, forward, step);
@@ -456,11 +471,11 @@ double gainKOptMove(KOptData *data, int k) {
         } else {
             step += abs(prev->backStep - cur->backStep) + 1;
         }
-        int nextT = data->incl[data->p[i].v];
-        Node *next = data->t[nextT];
-        cost += data->dist[nextT] * calcPenalty(cur, step);
+        int nextT = incl[p[i].v];
+        Node *next = t[nextT];
+        cost += dist[nextT] * calcPenalty(cur, step);
         prev = next;
-        i = data->q[nextT];
+        i = q[nextT];
         forward = (i & 1) == 0;
         // odd -> -=1 even -> +=1
         i = i ^ 1;
@@ -468,18 +483,18 @@ double gainKOptMove(KOptData *data, int k) {
             break;
         }
         count++;
-        cur = data->t[data->p[i].v];
+        cur = t[p[i].v];
     } while (true);
 
     double backwardGain =
             getTourCost(*data->nodes) - cost -
-            cummDiff(data, data->t[data->p[endI].v], data->t[data->p[startI].v], forward, step);
+            cummDiff(data, t[p[endI].v], t[p[startI].v], forward, step);
 
     if (forwardGain > backwardGain) {
-        data->incl[0] = 0;
+        incl[0] = 0;
         return forwardGain;
     }
-    data->incl[0] = 1;
+    incl[0] = 1;
     return backwardGain;
 }
 
@@ -508,15 +523,16 @@ int pCmp(const void *a, const void *b) {
 }
 
 void findPermutation(KOptData *data, PStruct p[], int q[], int k) {
+    Node **t = data->t;
     int i, j;
     // index from 1 to be consistent with paper
     for (i = j = 1; j <= k; i += 2, j++) {
-        if (data->t[i]->from == data->t[i + 1]) {
+        if (t[i]->from == t[i + 1]) {
             p[j].v = i + 1;
-            p[j].n = data->t[i + 1];
+            p[j].n = t[i + 1];
         } else {
             p[j].v = i;
-            p[j].n = data->t[i];
+            p[j].n = t[i];
         }
     }
     // sorts by steps in increasing order
