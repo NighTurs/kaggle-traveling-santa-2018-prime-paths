@@ -325,13 +325,13 @@ long long kOpts(int k, int maxReverse, Node nodes[]) {
         case 3:
             return 2 * AVG_CAND * 2 * AVG_CAND;
         case 4:
-            return 2 * AVG_CAND * rev * 2 * AVG_CAND;
+            return 2 * AVG_CAND * 2 * rev * 2 * AVG_CAND;
         case 5:
-            return 2 * AVG_CAND * 2 * AVG_CAND * rev * 2 * AVG_CAND;
+            return 2 * AVG_CAND * 2 * AVG_CAND * 2 * rev * 2 * AVG_CAND;
         case 6:
-            return 2 * AVG_CAND * 2 * AVG_CAND * 2 * AVG_CAND * rev * 2 * AVG_CAND;
+            return 2 * AVG_CAND * 2 * AVG_CAND * 2 * AVG_CAND * 2 * rev * 2 * AVG_CAND;
         case 7:
-            return 2 * AVG_CAND * 2 * AVG_CAND * rev * 2 * AVG_CAND * rev * 2 * AVG_CAND;
+            return 2 * AVG_CAND * 2 * AVG_CAND * 2 * rev * 2 * AVG_CAND * 2 * rev * 2 * AVG_CAND;
         default:
             return 0;
     }
