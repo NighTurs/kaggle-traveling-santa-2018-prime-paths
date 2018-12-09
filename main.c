@@ -199,7 +199,7 @@ void improveTour(int nThreads, const char subFile[], long long optLimit, int cyc
         }
         cycleLen += SHORT_CYCLE_SAFE;
         long long opts = 0;
-        int itK = 2;
+        int itK = 4;
         gettimeofday(&start, NULL);
         while (opts < optLimit) {
             long long kOptCost = kOpts(itK, cycleLen, nodes);
