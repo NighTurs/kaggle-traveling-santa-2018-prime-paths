@@ -248,6 +248,8 @@ void improveTour(int nThreads, const char subFile[], long long optLimit, int cyc
                 }
             }
 
+            int inOrderSize = orderSize;
+            orderSize = 0;
             qsort(cityGain, NUM_CITIES, sizeof(CityGain), CityGainCmp);
             for (int i = 0; i < NUM_CITIES; i++) {
                 if (cityGain[i].maxGain > E) {
@@ -258,10 +260,10 @@ void improveTour(int nThreads, const char subFile[], long long optLimit, int cyc
                 }
             }
 
-            printf("----Time=%ld Gain=%.3lf SolK=%d ItK=%d Cycle=%d MaxCycle=%d OrderSize=%d\n",
+            printf("----Time=%ld Gain=%.3lf SolK=%d ItK=%d Cycle=%d MaxCycle=%d InCities=%d OutCities=%d\n",
                    end2.tv_sec - start2.tv_sec, maxGain,
                    datas[maxGainTh]->bestK,
-                   itK, datas[maxGainTh]->bestCycle, cycleLen, orderSize);
+                   itK, datas[maxGainTh]->bestCycle, cycleLen, inOrderSize, orderSize);
             fflush(stdout);
             itK++;
             if (itK > 7) {
