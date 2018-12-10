@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
     readCities("cities.csv");
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
-    readTourSubmission(argv[2], tour);
+//    readTourSubmission(argv[2], tour);
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
@@ -195,17 +195,17 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                 curCycleLen = cycleHist[i];
             }
         }
+        int chunk = (NUM_CITIES - 1 + nThreads) / nThreads;
         curCycleLen += SHORT_CYCLE_SAFE;
         int time = 0;
         int processed = 0;
         int itK = 2;
         gettimeofday(&start, NULL);
         while (time < timeLimit) {
-            int chunk = (orderSize + nThreads) / nThreads;
             for (int i = 0; i < nThreads; i++) {
                 curData = datas[i];
                 datas[i]->order = order + (i * chunk);
-                datas[i]->orderSize = (i + 1) * chunk > orderSize ? orderSize - (i * chunk) : chunk;
+                datas[i]->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
                 curData->maxK = itK;
                 curData->cycleMax = curCycleLen;
                 curData->maxGain = 0;
@@ -243,7 +243,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             qsort(cityGain, NUM_CITIES, sizeof(CityGain), CityGainCmp);
             for (int i = 0; i < NUM_CITIES; i++) {
                 if (cityGain[i].maxGain > E) {
-                    order[i] = cityGain[i].city;
+                    order[(i % nThreads) * chunk + i / nThreads] = cityGain[i].city;
                     orderSize = i + 1;
                 } else {
                     break;
