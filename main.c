@@ -178,8 +178,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         datas[i]->isFindMax = true;
     }
 
-    KOptData *curData;
-    double maxGain = 0;
+    KOptData bestData;
     int maxGainTh = 0;
     int iter = 0;
     do {
@@ -199,33 +198,39 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         curCycleLen += SHORT_CYCLE_SAFE;
         int time = 0;
         int processed = 0;
+        double maxGain = 0;
         int itK = 2;
         gettimeofday(&start, NULL);
         while (time < timeLimit) {
             for (int i = 0; i < nThreads; i++) {
-                curData = datas[i];
-                datas[i]->order = order + (i * chunk);
-                datas[i]->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
-                curData->maxK = itK;
-                curData->cycleMax = curCycleLen;
-                curData->maxGain = 0;
-                curData->timeLimit = (timeLimit - time) / 2 > 0 ? (timeLimit - time) / 2 : 1;
+                KOptData *cur = datas[i];
+                cur->order = order + (i * chunk);
+                cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
+                cur->maxK = itK;
+                cur->cycleMax = curCycleLen;
+                cur->maxGain = 0;
+                cur->timeLimit = (timeLimit - time) / 2 > 0 ? (timeLimit - time) / 2 : 1;
                 datas[i]->doReverse = iter < 10;
-                initCityGain(curData->cityGain);
-                pthread_create(&thread_id[i], NULL, kOptStart, (void *) curData);
+                initCityGain(cur->cityGain);
+                pthread_create(&thread_id[i], NULL, kOptStart, (void *) cur);
             }
 
-            maxGain = 0;
             processed = 0;
+            double maxCurGain = 0;
             gettimeofday(&start2, NULL);
             for (int i = 0; i < nThreads; i++) {
                 pthread_join(thread_id[i], NULL);
                 processed += datas[i]->nProcessed;
-                if (maxGain < datas[i]->maxGain) {
-                    maxGain = datas[i]->maxGain;
+                if (maxCurGain < datas[i]->maxGain) {
+                    maxCurGain = datas[i]->maxGain;
                     maxGainTh = i;
                 }
             }
+            if (maxCurGain > maxGain) {
+                maxGain = maxCurGain;
+                bestData = *datas[maxGainTh];
+            }
+
             gettimeofday(&end2, NULL);
             time += end2.tv_sec - start2.tv_sec;
 
@@ -262,25 +267,25 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         if (maxGain < E) {
             break;
         }
-        curData = datas[maxGainTh];
-        if (curData->bestCycle > 0) {
+
+        if (bestData.bestCycle > 0) {
             histIdx++;
             if (histIdx >= CYCLE_HIST_SIZE) {
                 histIdx = 0;
             }
-            cycleHist[histIdx] = curData->bestCycle;
+            cycleHist[histIdx] = bestData.bestCycle;
         }
 
-        calcNewNodes(curData->tBest, curData->inclBest, curData->bestK, curData->bestRev, nodes, nodes, tour);
+        calcNewNodes(bestData.tBest, bestData.inclBest, bestData.bestK, bestData.bestRev, nodes, nodes, tour);
         double newCost = getTourCost(nodes);
         printf("Iter=%d Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d MaxCycle=%d\n",
                iter,
                end.tv_sec - start.tv_sec,
-               curData->maxGain,
-               curCost - newCost - curData->maxGain,
+               bestData.maxGain,
+               curCost - newCost - bestData.maxGain,
                newCost,
-               curData->bestK,
-               curData->bestCycle,
+               bestData.bestK,
+               bestData.bestCycle,
                curCycleLen
         );
         fflush(stdout);
