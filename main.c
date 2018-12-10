@@ -256,7 +256,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             }
 
             printf("----Time=%ld Gain=%.3lf SolK=%d ItK=%d Cycle=%d MaxCycle=%d InCities=%d Processed=%d OutCities=%d\n",
-                   end2.tv_sec - start2.tv_sec, maxGain,
+                   end2.tv_sec - start2.tv_sec, maxCurGain,
                    datas[maxGainTh]->bestK,
                    itK, datas[maxGainTh]->bestCycle, curCycleLen, inOrderSize, processed, orderSize);
             fflush(stdout);
