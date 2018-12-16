@@ -232,6 +232,8 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                 itK++;
             }
             continue;
+        } else {
+            processed = 0;
         }
 
         if (bestData.bestCycle > 0) {
