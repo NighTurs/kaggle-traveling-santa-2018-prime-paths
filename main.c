@@ -158,7 +158,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     struct timeval start, end;
     pthread_t thread_id[nThreads];
     KOptData *datas[nThreads];
-    CityGain *cityGain = (CityGain *) malloc(sizeof(CityGain) * NUM_CITIES);
     int order[NUM_CITIES - 1];
     int cycleHist[CYCLE_HIST_SIZE];
     memset(cycleHist, 0, sizeof(cycleHist));
