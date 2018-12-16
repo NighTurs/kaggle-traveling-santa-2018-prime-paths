@@ -17,7 +17,7 @@
 #define WRITE_BUFF_SIZE 4096
 #define MAX_CAND 15
 #define PENALTY 1.1
-#define MAX_K 20
+#define MAX_K 50
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
 #define SHORT_CYCLE_SAFE 100
@@ -50,7 +50,6 @@ typedef struct {
 } CityGain;
 
 typedef struct {
-    CityGain cityGain[NUM_CITIES];
     int *order;
     int orderSize;
     Node *nodes;
@@ -70,6 +69,7 @@ typedef struct {
     int bestCycle;
     int timeLimit;
     int minT;
+    double pureGainLimit;
     int nProcessed;
     bool doReverse;
     bool isFindMax;
@@ -85,21 +85,20 @@ Cand candidates[NUM_CITIES][MAX_CAND + 1];
 
 void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen);
 
-void initCityGain(CityGain cityGain[]);
-
 void *kOptStart(void *arg);
 
-void kOptMovRec(KOptData *data, int k);
+void kOptMovRec(KOptData *data, int k, double pureGain);
 
-void updateCityGains(KOptData *data, double gain, int k);
+double updGain(Node *t1, Node *t2, double subD, double pureGain);
 
 void writeBestOpt(KOptData *data, double gain, int k, int cycle);
 
 double gainKOptMove(KOptData *data, int k);
 
-int patchCycles(KOptData *data, int k);
+int patchCycles(KOptData *data, int k, double pureGain);
 
-void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[]);
+void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[],
+                    double pureGain);
 
 int findCycle(KOptData *data, Node *N, int k, PStruct p[], int cycle[]);
 
@@ -147,7 +146,7 @@ int main(int argc, char **argv) {
     readCities("cities.csv");
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
-//    readTourSubmission(argv[2], tour);
+    readTourSubmission(argv[2], tour);
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
@@ -155,13 +154,8 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-int CityGainCmp(const void *a, const void *b) {
-    return (((CityGain *) b)->maxGain - ((CityGain *) a)->maxGain) > 0 ? 1 : -1;
-}
-
 void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen) {
     struct timeval start, end;
-    struct timeval start2, end2;
     pthread_t thread_id[nThreads];
     KOptData *datas[nThreads];
     CityGain *cityGain = (CityGain *) malloc(sizeof(CityGain) * NUM_CITIES);
@@ -176,18 +170,22 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         datas[i]->nodes = nodes;
         datas[i]->startNode = &nodes[0];
         datas[i]->isFindMax = true;
+        datas[i]->pureGainLimit = 0;
     }
 
     KOptData bestData;
     int maxGainTh = 0;
     int iter = 0;
+    int itK = 5;
+    int processed = 0;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-noreturn"
     do {
         double curCost = getTourCost(nodes);
         for (int i = 0; i < NUM_CITIES - 1; i++) {
             order[i] = i + 1;
         }
         shuffle(order, NUM_CITIES - 1);
-        int orderSize = NUM_CITIES - 1;
         int curCycleLen = 0;
         for (int i = 0; i < CYCLE_HIST_SIZE; i++) {
             if (curCycleLen < cycleHist[i]) {
@@ -196,76 +194,45 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         }
         int chunk = (NUM_CITIES - 1 + nThreads) / nThreads;
         curCycleLen += SHORT_CYCLE_SAFE;
-        int time = 0;
-        int processed = 0;
+
         double maxGain = 0;
-        int itK = 2;
         gettimeofday(&start, NULL);
-        while (time < timeLimit) {
-            for (int i = 0; i < nThreads; i++) {
-                KOptData *cur = datas[i];
-                cur->order = order + (i * chunk);
-                cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
-                cur->maxK = itK;
-                cur->cycleMax = curCycleLen;
-                cur->maxGain = 0;
-                cur->timeLimit = (timeLimit - time) / 2 > 0 ? (timeLimit - time) / 2 : 1;
-                datas[i]->doReverse = iter < 10;
-                initCityGain(cur->cityGain);
-                pthread_create(&thread_id[i], NULL, kOptStart, (void *) cur);
-            }
-
-            processed = 0;
-            double maxCurGain = 0;
-            gettimeofday(&start2, NULL);
-            for (int i = 0; i < nThreads; i++) {
-                pthread_join(thread_id[i], NULL);
-                processed += datas[i]->nProcessed;
-                if (maxCurGain < datas[i]->maxGain) {
-                    maxCurGain = datas[i]->maxGain;
-                    maxGainTh = i;
-                }
-            }
-            if (maxCurGain > maxGain) {
-                maxGain = maxCurGain;
-                bestData = *datas[maxGainTh];
-            }
-
-            gettimeofday(&end2, NULL);
-            time += end2.tv_sec - start2.tv_sec;
-
-            memcpy(cityGain, datas[0]->cityGain, sizeof(CityGain) * NUM_CITIES);
-            for (int i = 0; i < nThreads; i++) {
-                for (int h = 0; h < NUM_CITIES; h++) {
-                    if (cityGain[h].maxGain < datas[i]->cityGain[h].maxGain) {
-                        cityGain[h].maxGain = datas[i]->cityGain[h].maxGain;
-                    }
-                }
-            }
-
-            int inOrderSize = orderSize;
-            orderSize = 0;
-            qsort(cityGain, NUM_CITIES, sizeof(CityGain), CityGainCmp);
-            for (int i = 0; i < NUM_CITIES; i++) {
-                if (cityGain[i].maxGain > E) {
-                    order[(i % nThreads) * chunk + i / nThreads] = cityGain[i].city;
-                    orderSize = i + 1;
-                } else {
-                    break;
-                }
-            }
-
-            printf("----Time=%ld Gain=%.3lf SolK=%d ItK=%d Cycle=%d MaxCycle=%d InCities=%d Processed=%d OutCities=%d\n",
-                   end2.tv_sec - start2.tv_sec, maxCurGain,
-                   datas[maxGainTh]->bestK,
-                   itK, datas[maxGainTh]->bestCycle, curCycleLen, inOrderSize, processed, orderSize);
-            fflush(stdout);
-            itK++;
+        for (int i = 0; i < nThreads; i++) {
+            KOptData *cur = datas[i];
+            cur->order = order + (i * chunk);
+            cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
+            cur->maxK = itK;
+            cur->cycleMax = curCycleLen;
+            cur->maxGain = 0;
+            cur->timeLimit = timeLimit;
+            datas[i]->doReverse = false;
+            pthread_create(&thread_id[i], NULL, kOptStart, (void *) cur);
         }
+
+        double maxCurGain = 0;
+        for (int i = 0; i < nThreads; i++) {
+            pthread_join(thread_id[i], NULL);
+            processed += datas[i]->nProcessed;
+            if (maxCurGain < datas[i]->maxGain) {
+                maxCurGain = datas[i]->maxGain;
+                maxGainTh = i;
+            }
+        }
+        if (maxCurGain > maxGain) {
+            maxGain = maxCurGain;
+            bestData = *datas[maxGainTh];
+        }
+
         gettimeofday(&end, NULL);
 
         if (maxGain < E) {
-            break;
+            printf("No improvement ItK=%d MaxGain=%.3lf Processed=%d\n", itK, maxGain, processed);
+            fflush(stdout);
+            if (processed >= NUM_CITIES) {
+                processed = 0;
+                itK++;
+            }
+            continue;
         }
 
         if (bestData.bestCycle > 0) {
@@ -292,16 +259,10 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         writeSubmission(subFile, nodes);
         iter++;
     } while (true);
+#pragma clang diagnostic pop
 
     for (int i = 0; i < nThreads; i++) {
         free(datas[i]);
-    }
-}
-
-void initCityGain(CityGain cityGain[]) {
-    for (int i = 0; i < NUM_CITIES; i++) {
-        cityGain[i].maxGain = 0;
-        cityGain[i].city = i;
     }
 }
 
@@ -319,8 +280,8 @@ void *kOptStart(void *arg) {
             }
             t[1] = t1;
             t[2] = t2;
-            data->minT = t1->cityId;
-            kOptMovRec(data, 2);
+            data->minT = 1;
+            kOptMovRec(data, 2, 0);
             if (!data->isFindMax && data->maxGain > E) {
                 return NULL;
             }
@@ -337,7 +298,7 @@ void *kOptStart(void *arg) {
     return NULL;
 }
 
-void kOptMovRec(KOptData *data, int k) {
+void kOptMovRec(KOptData *data, int k, double pureGain) {
     Node **t = data->t;
     int *incl = data->incl;
     double *dist = data->dist;
@@ -359,6 +320,10 @@ void kOptMovRec(KOptData *data, int k) {
         incl[2 * k - 2] = 2 * k - 1;
         dist[2 * k - 1] = t3Cand->dist;
         dist[2 * k - 2] = t3Cand->dist;
+        double uPureGain = updGain(t[2 * k - 3], t2, t3Cand->dist, pureGain);
+        if (uPureGain < data->pureGainLimit) {
+            continue;
+        }
         for (int x4 = 0; x4 < 2; x4++) {
             Node *t4 = x4 == 0 ? t3->to : t3->from;
             if (t4->cityId < minT || isDeleted(data, t3, t4, k - 2)) {
@@ -372,9 +337,6 @@ void kOptMovRec(KOptData *data, int k) {
             dist[2 * k] = d;
             double gain = gainKOptMove(data, k);
 
-            if (gain > E) {
-                updateCityGains(data, gain, k);
-            }
             if (gain > data->maxGain) {
                 writeBestOpt(data, gain, k, 0);
             }
@@ -382,8 +344,9 @@ void kOptMovRec(KOptData *data, int k) {
                 return;
             }
             if (gain == ILLEGAL_OPT) {
-                if (k + 2 <= maxK && t4 != t1) {
-                    patchCycles(data, k);
+                double closePureGain = updGain(t3, t4, d, uPureGain);
+                if (k + 2 <= maxK && t4 != t1 && closePureGain >= data->pureGainLimit) {
+                    patchCycles(data, k, closePureGain);
                     if (!data->isFindMax && data->maxGain > E) {
                         return;
                     }
@@ -391,7 +354,7 @@ void kOptMovRec(KOptData *data, int k) {
             }
 
             if (k < maxK) {
-                kOptMovRec(data, k + 1);
+                kOptMovRec(data, k + 1, uPureGain);
                 if (!isFindMax && data->maxGain > E) {
                     return;
                 }
@@ -400,7 +363,17 @@ void kOptMovRec(KOptData *data, int k) {
     }
 }
 
-int patchCycles(KOptData *data, int k) {
+double updGain(Node *t1, Node *t2, double subD, double pureGain) {
+    double a;
+    if (t1->step < t2->step) {
+        a = fabs(t2->cumFw[6] - t1->cumFw[5]);
+    } else {
+        a = fabs(t1->cumFw[6] - t2->cumFw[5]);
+    }
+    return pureGain + a - subD;
+}
+
+int patchCycles(KOptData *data, int k, double pureGain) {
     PStruct p[k * 2 + 1];
     int q[k * 2 + 1];
     int cycle[k * 2 + 1];
@@ -434,7 +407,7 @@ int patchCycles(KOptData *data, int k) {
             data->t[2 * k + 1] = s1;
             data->t[2 * k + 2] = s2;
 
-            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
+            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, pureGain);
             if (!data->isFindMax && data->maxGain > E) {
                 return M;
             }
@@ -442,7 +415,7 @@ int patchCycles(KOptData *data, int k) {
             data->t[2 * k + 1] = s2;
             data->t[2 * k + 2] = s1;
 
-            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
+            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, pureGain);
             if (!data->isFindMax && data->maxGain > E) {
                 return M;
             }
@@ -450,7 +423,8 @@ int patchCycles(KOptData *data, int k) {
     }
 }
 
-void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[]) {
+void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[],
+                    double pureGain) {
     Node **t = data->t;
     int *incl = data->incl;
     double *dist = data->dist;
@@ -470,6 +444,10 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         t[2 * (k + m) - 1] = s3;
         dist[2 * (k + m) - 2] = s3Cand->dist;
         dist[2 * (k + m) - 1] = s3Cand->dist;
+        double uPureGain = updGain(t[2 * (k + m) - 3], s2, s3Cand->dist, pureGain);
+        if (uPureGain < data->pureGainLimit) {
+            continue;
+        }
         for (int x4 = 0; x4 < 2; x4++) {
             Node *s4 = x4 == 0 ? s3->to : s3->from;
             if (s4->cityId == 0 || isDeleted(data, s3, s4, k)) {
@@ -481,7 +459,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 for (i = 1; i <= 2 * k; i++) {
                     cycleAdj[i] = cycle[i] == newCycle ? curCycle : cycle[i];
                 }
-                patchCyclesRec(data, k, m + 1, M - 1, curCycle, p, cycleAdj, size);
+                patchCyclesRec(data, k, m + 1, M - 1, curCycle, p, cycleAdj, size, uPureGain);
                 if (!data->isFindMax && data->maxGain > E) {
                     return;
                 }
@@ -491,7 +469,11 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
                 dist[2 * k + 1] = d;
                 dist[2 * (k + m)] = d;
-                patchCycles(data, k + m);
+                double closePureGain = updGain(s3, s4, d, uPureGain);
+                if (closePureGain < data->pureGainLimit) {
+                    continue;
+                }
+                patchCycles(data, k + m, closePureGain);
                 if (!data->isFindMax && data->maxGain > E) {
                     return;
                 }
@@ -500,9 +482,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 dist[2 * k + 1] = d;
                 dist[2 * (k + m)] = d;
                 double gain = gainKOptMove(data, k + m);
-                if (gain > E) {
-                    updateCityGains(data, gain, k + m);
-                }
+
                 if (gain > data->maxGain) {
                     writeBestOpt(data, gain, k + m, size[curCycle]);
                 }
@@ -526,6 +506,10 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         t[2 * (k + m) - 1] = s3;
         dist[2 * (k + m) - 2] = s3Cand->dist;
         dist[2 * (k + m) - 1] = s3Cand->dist;
+        double uPureGain = updGain(t[2 * (k + m) - 3], s2, s3Cand->dist, pureGain);
+        if (uPureGain < data->pureGainLimit) {
+            continue;
+        }
         for (int x4 = 0; x4 < 2; x4++) {
             Node *s4 = x4 == 0 ? s3->to : s3->from;
             if (s4->cityId == 0 || isDeleted(data, s3, s4, k)) {
@@ -545,6 +529,10 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 incl[incl[2 * (k + m)] = 2 * (k + m) + 1] = 2 * (k + m);
                 dist[2 * (k + m)] = s5Cand->dist;
                 dist[2 * (k + m) + 1] = s5Cand->dist;
+                double uPureGain2 = updGain(s3, s4, s5Cand->dist, uPureGain);
+                if (uPureGain2 < data->pureGainLimit) {
+                    continue;
+                }
                 for (int x6 = 0; x6 < 2; x6++) {
                     Node *s6 = x6 == 0 ? s5->to : s5->from;
                     if (s6->cityId == 0 || isDeleted(data, s5, s6, k) || isAdded(data, s6, s1, k)) {
@@ -556,9 +544,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                     dist[2 * k + 1] = d;
                     dist[2 * (k + m) + 2] = d;
                     double gain = gainKOptMove(data, k + m + 1);
-                    if (gain > E) {
-                        updateCityGains(data, gain, k + m + 1);
-                    }
+
                     if (gain > data->maxGain) {
                         writeBestOpt(data, gain, k + m + 1, size[curCycle]);
                     }
@@ -567,16 +553,6 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                     }
                 }
             }
-        }
-    }
-}
-
-void updateCityGains(KOptData *data, double gain, int k) {
-    CityGain *cityGain = data->cityGain;
-    Node **t = data->t;
-    for (int i = 1; i <= k * 2; i++) {
-        if (cityGain[t[i]->cityId].maxGain < gain) {
-            cityGain[t[i]->cityId].maxGain = gain;
         }
     }
 }
