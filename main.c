@@ -85,11 +85,22 @@ Cand candidates[NUM_CITIES][MAX_CAND + 1];
 
 void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen);
 
+void basicKOptStart(KOptData *data);
+
+void basicKOptMovRec(KOptData *data, int k, double gain);
+
+int basicPatchCycles(KOptData *data, int k, double gain);
+
+void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[],
+                         double gain);
+
 void *kOptStart(void *arg);
 
 void kOptMovRec(KOptData *data, int k);
 
 void writeBestOpt(KOptData *data, double gain, int k, int cycle);
+
+int isFeasibleKOptMove(KOptData *data, int k);
 
 double gainKOptMove(KOptData *data, int k);
 
@@ -115,6 +126,8 @@ bool isDeleted(KOptData *data, Node *t1, Node *t2, int k);
 
 double getTourCost(Node nodes[]);
 
+double basicTourCost(Node nodes[]);
+
 void calcNewNodes(Node *t[], const int incl[], int k, int revStart, Node oldNodes[], Node newNodes[], int tour[]);
 
 void buildNodes(int const tour[], Node nodes[]);
@@ -139,7 +152,7 @@ void shuffle(int *array, size_t n);
 
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
 int main(int argc, char **argv) {
-    srand(1234);
+    srand(342123);
     readCities("cities.csv");
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
@@ -155,12 +168,14 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     struct timeval start, end;
     struct timeval start2, end2;
     pthread_t thread_id[nThreads];
+    KOptData basic;
     KOptData *datas[nThreads];
     int order[NUM_CITIES - 1];
 
     for (int i = 0; i < nThreads; i++) {
         datas[i] = (KOptData *) malloc(sizeof(KOptData));
         datas[i]->isFindMax = true;
+        datas[i]->fixed[0] = 0;
     }
 
     for (int i = 0; i < NUM_CITIES - 1; i++) {
@@ -172,134 +187,339 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     KOptData bestData;
     int maxGainTh = 0;
 
+    double basicBestCost = basicTourCost(nodes);
     Node *nodesBest = nodes;
     Node *nodesCand = nodes1;
 
-    Node *t[5];
-    int incl[5];
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
-    outer_loop: while (true) {
-        Node *t1 = &nodesBest[1 + rand() % (NUM_CITIES - 1)];
+    outer_loop:
+    while (true) {
+
+        shuffle(order, NUM_CITIES - 1);
+        basic.nodes = nodesBest;
+        basic.startNode = &nodesBest[0];
+        basic.order = order;
+        basic.orderSize = NUM_CITIES - 1;
+        basic.maxK = 7;
+        basic.cycleMax = NUM_CITIES;
+        basic.maxGain = 0;
+        basicKOptStart(&basic);
+
+        calcNewNodes(basic.tBest, basic.inclBest, basic.bestK, basic.bestRev, nodesBest, nodesCand, tour);
+        double basicCandCost = basicTourCost(nodesCand);
+
+        printf("Trying improvement CandCost=%.3lf Gain=%.3lf GainDiff=%.3lf K=%d\n", basicCandCost,
+               basic.maxGain,
+               basic.maxGain - (basicBestCost - basicCandCost), basic.bestK);
+
+        gettimeofday(&start, NULL);
+        int iter = 0;
+        do {
+            double curCost = getTourCost(nodesCand);
+            double maxGain = 0;
+            int itK = 4;
+            for (int i = 0; i < nThreads; i++) {
+                KOptData *cur = datas[i];
+                cur->nodes = nodesCand;
+                cur->startNode = &nodesCand[0];
+                cur->order = order + (i * chunk);
+                cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
+                cur->maxK = itK;
+                cur->cycleMax = cycleLen;
+                cur->maxGain = 0;
+                cur->timeLimit = timeLimit;
+                cur->doReverse = false;
+                pthread_create(&thread_id[i], NULL, kOptStart, (void *) cur);
+            }
+
+            double maxCurGain = 0;
+            gettimeofday(&start2, NULL);
+            for (int i = 0; i < nThreads; i++) {
+                pthread_join(thread_id[i], NULL);
+                if (maxCurGain < datas[i]->maxGain) {
+                    maxCurGain = datas[i]->maxGain;
+                    maxGainTh = i;
+                }
+            }
+            if (maxCurGain > maxGain) {
+                maxGain = maxCurGain;
+                bestData = *datas[maxGainTh];
+            }
+
+            gettimeofday(&end2, NULL);
+
+            if (maxGain < E || fabs(getTourCost(nodesBest) - (curCost - maxGain)) < E) {
+                break;
+            }
+
+            calcNewNodes(bestData.tBest, bestData.inclBest, bestData.bestK, bestData.bestRev, nodesCand, nodesCand,
+                         tour);
+            double newCost = getTourCost(nodesCand);
+            printf("------Iter=%d Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d\n",
+                   iter,
+                   end2.tv_sec - start2.tv_sec,
+                   bestData.maxGain,
+                   curCost - newCost - bestData.maxGain,
+                   newCost,
+                   bestData.bestK,
+                   bestData.bestCycle
+            );
+            fflush(stdout);
+
+            iter++;
+        } while (true);
+        gettimeofday(&end, NULL);
+
+        double gainDiff = getTourCost(nodesBest) - getTourCost(nodesCand);
+        if (gainDiff > E) {
+            printf("Time=%ld Gain=%.3lf Cost=%.3lf\n",
+                   end.tv_sec - start.tv_sec,
+                   gainDiff,
+                   getTourCost(nodesCand)
+            );
+            writeSubmission(subFile, nodesCand);
+            Node *z = nodesBest;
+            nodesBest = nodesCand;
+            nodesCand = z;
+            basicBestCost = basicTourCost(nodesBest);
+            goto outer_loop;
+        } else {
+            printf("No improvement %.3lf\n", gainDiff);
+        }
+        fflush(stdout);
+    }
+#pragma clang diagnostic pop
+}
+
+void basicKOptStart(KOptData *data) {
+    Node **t = data->t;
+    for (int i = 0; i < data->orderSize; i++) {
+        Node *t1 = &data->nodes[data->order[i]];
         for (int x1 = 0; x1 < 2; x1++) {
             Node *t2 = x1 == 0 ? t1->to : t1->from;
-            if (t2->cityId == 0) {
-                continue;
-            }
-
-            Cand *t3Cand;
-            Node *t3;
-            do {
-                int x3 = 1 + rand() % CAND_SIZE(t2->cityId);
-                t3Cand = &(candidates[t2->cityId][x3]);
-                t3 = &nodesBest[t3Cand->city];
-            } while (t3->cityId == 0 || t3 == t2->from || t3 == t2->to);
-
-            Node *t4;
-            if (t1->step < t2->step) {
-                t4 = t3->from;
-            } else {
-                t4 = t3->to;
-            }
-            if (t4->cityId == 0) {
+            if (t2->cityId == 0 || isDeleted(data, t1, t2, 0)) {
                 continue;
             }
             t[1] = t1;
             t[2] = t2;
-            t[3] = t3;
-            t[4] = t4;
-            incl[1] = 4;
-            incl[2] = 3;
-            incl[3] = 2;
-            incl[4] = 1;
-
-            calcNewNodes(t, incl, 2, 0, nodesBest, nodesCand, tour);
-            for (int i = 0; i < nThreads; i++) {
-                KOptData *cur = datas[i];
-                cur->fixed[0] = 2;
-                cur->fixed[1] = t1->cityId;
-                cur->fixed[2] = t4->cityId;
-                cur->fixed[3] = t2->cityId;
-                cur->fixed[4] = t3->cityId;
+            basicKOptMovRec(data, 2, distCity(t1->cityId, t2->cityId));
+            if (data->maxGain > E) {
+                return;
             }
-
-            gettimeofday(&start, NULL);
-            int iter = 0;
-            do {
-                double curCost = getTourCost(nodesCand);
-                double maxGain = 0;
-                int itK = 4;
-                for (int i = 0; i < nThreads; i++) {
-                    KOptData *cur = datas[i];
-                    cur->nodes = nodesCand;
-                    cur->startNode = &nodesCand[0];
-                    cur->order = order + (i * chunk);
-                    cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
-                    cur->maxK = itK;
-                    cur->cycleMax = cycleLen;
-                    cur->maxGain = 0;
-                    cur->timeLimit = timeLimit;
-                    cur->doReverse = false;
-                    pthread_create(&thread_id[i], NULL, kOptStart, (void *) cur);
-                }
-
-                double maxCurGain = 0;
-                gettimeofday(&start2, NULL);
-                for (int i = 0; i < nThreads; i++) {
-                    pthread_join(thread_id[i], NULL);
-                    if (maxCurGain < datas[i]->maxGain) {
-                        maxCurGain = datas[i]->maxGain;
-                        maxGainTh = i;
-                    }
-                }
-                if (maxCurGain > maxGain) {
-                    maxGain = maxCurGain;
-                    bestData = *datas[maxGainTh];
-                }
-
-                gettimeofday(&end2, NULL);
-
-                if (maxGain < E) {
-                    break;
-                }
-
-                calcNewNodes(bestData.tBest, bestData.inclBest, bestData.bestK, bestData.bestRev, nodesCand, nodesCand,
-                             tour);
-                double newCost = getTourCost(nodesCand);
-                printf("------Iter=%d Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d\n",
-                       iter,
-                       end2.tv_sec - start2.tv_sec,
-                       bestData.maxGain,
-                       curCost - newCost - bestData.maxGain,
-                       newCost,
-                       bestData.bestK,
-                       bestData.bestCycle
-                );
-                fflush(stdout);
-
-                iter++;
-            } while (true);
-            gettimeofday(&end, NULL);
-
-            double gainDiff = getTourCost(nodesBest) - getTourCost(nodesCand);
-            if (gainDiff > E) {
-                printf("Time=%ld Gain=%.3lf Cost=%.3lf\n",
-                       end.tv_sec - start.tv_sec,
-                       gainDiff,
-                       getTourCost(nodesCand)
-                );
-                writeSubmission(subFile, nodesCand);
-                Node *z = nodesBest;
-                nodesBest = nodesCand;
-                nodesCand = z;
-                goto outer_loop;
-            } else {
-                printf("No improvement %.3lf\n", gainDiff);
-            }
-            fflush(stdout);
         }
     }
-#pragma clang diagnostic pop
+}
+
+void basicKOptMovRec(KOptData *data, int k, double gain) {
+    Node **t = data->t;
+    int *incl = data->incl;
+    Node *nodes = data->nodes;
+    int maxK = data->maxK;
+    Node *t1 = t[1];
+    Node *t2 = t[2 * k - 2];
+    for (int x3 = 1; x3 <= CAND_SIZE(t2->cityId); x3++) {
+        Cand *t3Cand = &(candidates[t2->cityId][x3]);
+        Node *t3 = &nodes[t3Cand->city];
+        if (t3->cityId == 0 || t3 == t2->from || t3 == t2->to || isAdded(data, t2, t3, k - 2)) {
+            continue;
+        }
+        t[2 * k - 1] = t3;
+        incl[2 * k - 1] = 2 * k - 2;
+        incl[2 * k - 2] = 2 * k - 1;
+        if (gain - t3Cand->dist < 0) {
+            continue;
+        }
+        for (int x4 = 0; x4 < 2; x4++) {
+            Node *t4 = x4 == 0 ? t3->to : t3->from;
+            if (t4->cityId == 0 || isDeleted(data, t3, t4, k - 2)) {
+                continue;
+            }
+            t[2 * k] = t4;
+            incl[1] = 2 * k;
+            incl[2 * k] = 1;
+            double curGain = gain - t3Cand->dist + distCity(t3->cityId, t4->cityId);
+            double finalGain = curGain - distCity(t1->cityId, t4->cityId);
+            if (finalGain > E) {
+                if (isFeasibleKOptMove(data, k)) {
+                    writeBestOpt(data, finalGain, k, 0);
+                    return;
+                } else {
+                    if (k + 2 <= maxK && t4 != t1 && finalGain > 0) {
+                        basicPatchCycles(data, k, finalGain);
+                        if (data->maxGain > E) {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (k < maxK) {
+                basicKOptMovRec(data, k + 1, curGain);
+                if (data->maxGain > E) {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+int basicPatchCycles(KOptData *data, int k, double gain) {
+    PStruct p[k * 2 + 1];
+    int q[k * 2 + 1];
+    int cycle[k * 2 + 1];
+    int size[k * 2 + 1];
+    findPermutation(data, p, q, k);
+
+    int M, i;
+    Node *s2;
+
+    M = countCycles(data, p, q, cycle, k);
+
+    if (data->maxK < k + M) {
+        return M;
+    }
+    int curCycle = shortestCycle(data, M, k, p, cycle, size);
+    if (data->cycleMax < size[curCycle]) {
+        return M;
+    }
+
+    for (i = 0; i < k; i++) {
+        if (cycle[p[2 * i].v] != curCycle) {
+            continue;
+        }
+        Node *sStart = data->t[p[2 * i].v];
+        Node *sStop = data->t[p[2 * i + 1].v];
+        for (Node *s1 = sStart; s1 != sStop; s1 = s2) {
+            s2 = s1->to;
+            if (s1->cityId == 0 || s2->cityId == 0 || isDeleted(data, s1, s2, 0)) {
+                continue;
+            }
+            data->t[2 * k + 1] = s1;
+            data->t[2 * k + 2] = s2;
+            double d = distCity(s1->cityId, s2->cityId);
+
+            basicPatchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, gain + d);
+            if (data->maxGain > E) {
+                return M;
+            }
+
+            data->t[2 * k + 1] = s2;
+            data->t[2 * k + 2] = s1;
+
+            basicPatchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, gain + d);
+            if (data->maxGain > E) {
+                return M;
+            }
+        }
+    }
+}
+
+void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[],
+                         double gain) {
+    Node **t = data->t;
+    int *incl = data->incl;
+    int newCycle, i;
+    int cycleAdj[1 + 2 * k];
+    Node *s1 = t[2 * k + 1];
+    Node *s2 = t[i = 2 * (k + m) - 2];
+    incl[incl[i] = i + 1] = i;
+    for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
+        Cand *s3Cand = &(candidates[s2->cityId][x3]);
+        Node *s3 = &data->nodes[s3Cand->city];
+        if (s3->cityId == 0 || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)
+            || (newCycle = findCycle(data, s3, k, p, cycle)) == curCycle) {
+            continue;
+        }
+        t[2 * (k + m) - 1] = s3;
+        if (gain - s3Cand->dist < 0) {
+            continue;
+        }
+        for (int x4 = 0; x4 < 2; x4++) {
+            Node *s4 = x4 == 0 ? s3->to : s3->from;
+            if (s4->cityId == 0 || isDeleted(data, s3, s4, k)) {
+                continue;
+            }
+            t[2 * (k + m)] = s4;
+            double curGain = gain - s3Cand->dist + distCity(s3->cityId, s4->cityId);
+            double finalGain = curGain - distCity(s4->cityId, s1->cityId);
+            if (M > 2) {
+                for (i = 1; i <= 2 * k; i++) {
+                    cycleAdj[i] = cycle[i] == newCycle ? curCycle : cycle[i];
+                }
+                basicPatchCyclesRec(data, k, m + 1, M - 1, curCycle, p, cycleAdj, size, curGain);
+                if (data->maxGain > E) {
+                    return;
+                }
+                if (s4 == s1) {
+                    continue;
+                }
+                incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
+                basicPatchCycles(data, k + m, finalGain);
+                if (data->maxGain > E) {
+                    return;
+                }
+            } else if (s4 != s1) {
+                incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
+                if (finalGain > E && isFeasibleKOptMove(data, k + m)) {
+                    writeBestOpt(data, finalGain, k + m, size[curCycle]);
+                    return;
+                }
+            }
+        }
+    }
+
+    if (M != 2 || data->maxK < k + m + 1) {
+        return;
+    }
+
+    for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
+        Cand *s3Cand = &(candidates[s2->cityId][x3]);
+        Node *s3 = &data->nodes[s3Cand->city];
+        if (s3->cityId == 0 || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3, k)) {
+            continue;
+        }
+        t[2 * (k + m) - 1] = s3;
+        if (gain - s3Cand->dist < 0) {
+            continue;
+        }
+        for (int x4 = 0; x4 < 2; x4++) {
+            Node *s4 = x4 == 0 ? s3->to : s3->from;
+            if (s4->cityId == 0 || isDeleted(data, s3, s4, k)) {
+                continue;
+            }
+            t[2 * (k + m)] = s4;
+
+            for (int x5 = 1; x5 <= CAND_SIZE(s4->cityId); x5++) {
+                Cand *s5Cand = &(candidates[s4->cityId][x5]);
+                Node *s5 = &data->nodes[s5Cand->city];
+                if (s5->cityId == 0 || s5 == s4->from || s5 == s4->to || isAdded(data, s4, s5, k) ||
+                    (newCycle = findCycle(data, s5, k, p, cycle)) == curCycle) {
+                    continue;
+                }
+
+                t[2 * (k + m) + 1] = s5;
+                incl[incl[2 * (k + m)] = 2 * (k + m) + 1] = 2 * (k + m);
+                double interGain = gain - s3Cand->dist + distCity(s3->cityId, s4->cityId) - s5Cand->dist;
+                if (interGain < 0) {
+                    continue;
+                }
+                for (int x6 = 0; x6 < 2; x6++) {
+                    Node *s6 = x6 == 0 ? s5->to : s5->from;
+                    if (s6->cityId == 0 || isDeleted(data, s5, s6, k) || isAdded(data, s6, s1, k)) {
+                        continue;
+                    }
+                    t[2 * (k + m) + 2] = s6;
+                    incl[incl[2 * k + 1] = 2 * (k + m) + 2] = 2 * k + 1;
+                    double finalGain = interGain + distCity(s5->cityId, s6->cityId) - distCity(s6->cityId, s1->cityId);
+                    if (finalGain > E && isFeasibleKOptMove(data, k + m + 1)) {
+                        writeBestOpt(data, finalGain, k + m + 1, size[curCycle]);
+                        return;
+                    }
+                }
+            }
+        }
+    }
 }
 
 void *kOptStart(void *arg) {
@@ -627,6 +847,18 @@ int shortestCycle(KOptData *data, int M, int k, PStruct p[], const int cycle[], 
     return minCycle;
 }
 
+int isFeasibleKOptMove(KOptData *data, int k) {
+    int count = 1, i = 2 * k;
+    int *incl = data->incl;
+    PStruct *p = data->p;
+    int *q = data->q;
+    findPermutation(data, p, q, k);
+    while ((i = q[incl[p[i].v]] ^ 1) != 0) {
+        count++;
+    }
+    return (count == k);
+}
+
 double gainKOptMove(KOptData *data, int k) {
     Node **t = data->t;
     int *incl = data->incl;
@@ -860,6 +1092,14 @@ void calcNewNodes(Node *t[], const int incl[], int k, int revStart, Node oldNode
 
 double getTourCost(Node nodes[]) {
     return nodes[0].cumFw[NUM_CITIES % 10];
+}
+
+double basicTourCost(Node nodes[]) {
+    double cost = nodes[0].to->cumFw[6];
+    for (int i = 1; i < NUM_CITIES; i++) {
+        cost += nodes[i].to->cumFw[6] - nodes[i].cumFw[5];
+    }
+    return cost;
 }
 
 void buildNodes(int const tour[], Node nodes[]) {
