@@ -209,9 +209,22 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         calcNewNodes(basic.tBest, basic.inclBest, basic.bestK, basic.bestRev, nodesBest, nodesCand, tour);
         double basicCandCost = basicTourCost(nodesCand);
 
+        for (int i = 0; i < nThreads; i++) {
+            datas[i]->fixed[0] = basic.bestK;
+            int hh = 1;
+            for (int h = 1; h <= basic.bestK * 2; h++) {
+                if (basic.inclBest[h] < h) {
+                    continue;
+                }
+                datas[i]->fixed[hh] = basic.tBest[h]->cityId;
+                datas[i]->fixed[hh + 1] = basic.tBest[basic.inclBest[h]]->cityId;
+                hh += 2;
+            }
+        }
         printf("Trying improvement CandCost=%.3lf Gain=%.3lf GainDiff=%.3lf K=%d\n", basicCandCost,
                basic.maxGain,
                basic.maxGain - (basicBestCost - basicCandCost), basic.bestK);
+        fflush(stdout);
 
         gettimeofday(&start, NULL);
         int iter = 0;
@@ -249,7 +262,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
 
             gettimeofday(&end2, NULL);
 
-            if (maxGain < E || fabs(getTourCost(nodesBest) - (curCost - maxGain)) < E) {
+            if (maxGain < E) {
                 break;
             }
 
@@ -266,7 +279,12 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                    bestData.bestCycle
             );
             fflush(stdout);
-
+            if (fabs(getTourCost(nodesBest) - (curCost - maxGain)) < E) {
+                break;
+            }
+            for (int i = 0; i < nThreads; i++) {
+                datas[i]->fixed[0] = 0;
+            }
             iter++;
         } while (true);
         gettimeofday(&end, NULL);
