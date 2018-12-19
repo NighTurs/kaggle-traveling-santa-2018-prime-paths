@@ -43,12 +43,6 @@ typedef struct {
 } PStruct;
 
 typedef struct {
-    int city;
-    double maxGain;
-} CityGain;
-
-typedef struct {
-    CityGain cityGain[NUM_CITIES];
     int *order;
     int orderSize;
     Node *nodes;
