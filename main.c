@@ -43,6 +43,9 @@ typedef struct {
 } PStruct;
 
 typedef struct {
+    int solTried[NUM_CITIES];
+    int solTarget;
+    int curSol;
     int *order;
     int orderSize;
     Node *nodes;
@@ -166,6 +169,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     KOptData *datas[nThreads];
     int order[NUM_CITIES - 1];
 
+    memset(basic.solTried, 0, sizeof(basic.solTried));
     for (int i = 0; i < nThreads; i++) {
         datas[i] = (KOptData *) malloc(sizeof(KOptData));
         datas[i]->isFindMax = true;
@@ -189,7 +193,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
     outer_loop:
     while (true) {
-
         shuffle(order, NUM_CITIES - 1);
         basic.nodes = nodesBest;
         basic.startNode = &nodesBest[0];
@@ -308,6 +311,7 @@ void basicKOptStart(KOptData *data) {
     Node **t = data->t;
     for (int i = 0; i < data->orderSize; i++) {
         Node *t1 = &data->nodes[data->order[i]];
+        data->curSol = 0;
         for (int x1 = 0; x1 < 2; x1++) {
             Node *t2 = x1 == 0 ? t1->to : t1->from;
             if (t2->cityId == 0 || isDeleted(data, t1, t2, 0)) {
@@ -315,8 +319,10 @@ void basicKOptStart(KOptData *data) {
             }
             t[1] = t1;
             t[2] = t2;
+            data->solTarget = data->solTried[t1->cityId];
             basicKOptMovRec(data, 2, distCity(t1->cityId, t2->cityId));
             if (data->maxGain > E) {
+                data->solTried[t1->cityId] = data->curSol;
                 return;
             }
         }
@@ -354,8 +360,11 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
             double finalGain = curGain - distCity(t1->cityId, t4->cityId);
             if (finalGain > E) {
                 if (isFeasibleKOptMove(data, k)) {
-                    writeBestOpt(data, finalGain, k, 0);
-                    return;
+                    data->curSol++;
+                    if (data->curSol > data->solTarget) {
+                        writeBestOpt(data, finalGain, k, 0);
+                        return;
+                    }
                 } else {
                     if (k + 2 <= maxK && t4 != t1 && finalGain > 0) {
                         basicPatchCycles(data, k, finalGain);
@@ -415,14 +424,6 @@ int basicPatchCycles(KOptData *data, int k, double gain) {
             if (data->maxGain > E) {
                 return M;
             }
-
-            data->t[2 * k + 1] = s2;
-            data->t[2 * k + 2] = s1;
-
-            basicPatchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, gain + d);
-            if (data->maxGain > E) {
-                return M;
-            }
         }
     }
 }
@@ -474,8 +475,11 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
             } else if (s4 != s1) {
                 incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
                 if (finalGain > E && isFeasibleKOptMove(data, k + m)) {
-                    writeBestOpt(data, finalGain, k + m, size[curCycle]);
-                    return;
+                    data->curSol++;
+                    if (data->curSol > data->solTarget) {
+                        writeBestOpt(data, finalGain, k + m, size[curCycle]);
+                        return;
+                    }
                 }
             }
         }
@@ -525,8 +529,11 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
                     incl[incl[2 * k + 1] = 2 * (k + m) + 2] = 2 * k + 1;
                     double finalGain = interGain + distCity(s5->cityId, s6->cityId) - distCity(s6->cityId, s1->cityId);
                     if (finalGain > E && isFeasibleKOptMove(data, k + m + 1)) {
-                        writeBestOpt(data, finalGain, k + m + 1, size[curCycle]);
-                        return;
+                        data->curSol++;
+                        if (data->curSol > data->solTarget) {
+                            writeBestOpt(data, finalGain, k + m + 1, size[curCycle]);
+                            return;
+                        }
                     }
                 }
             }
@@ -659,14 +666,6 @@ int patchCycles(KOptData *data, int k) {
             }
             data->t[2 * k + 1] = s1;
             data->t[2 * k + 2] = s2;
-
-            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
-            if (!data->isFindMax && data->maxGain > E) {
-                return M;
-            }
-
-            data->t[2 * k + 1] = s2;
-            data->t[2 * k + 2] = s1;
 
             patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
             if (!data->isFindMax && data->maxGain > E) {
