@@ -191,7 +191,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         datas[i] = (KOptData *) malloc(sizeof(KOptData));
         datas[i]->nodes = nodes;
         datas[i]->startNode = &nodes[0];
-        datas[i]->isFindMax = false;
+        datas[i]->isFindMax = true;
     }
 
     KOptData bestData;
