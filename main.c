@@ -438,14 +438,6 @@ int patchCycles(KOptData *data, int k) {
             if (!data->isFindMax && data->maxGain > E) {
                 return M;
             }
-
-            data->t[2 * k + 1] = s2;
-            data->t[2 * k + 2] = s1;
-
-            patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
-            if (!data->isFindMax && data->maxGain > E) {
-                return M;
-            }
         }
     }
 }
