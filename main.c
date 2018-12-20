@@ -13,6 +13,7 @@
 #include <pthread.h>
 
 #define NUM_CITIES 197769
+#define TIME_CHECK_FREQ 10000
 #define BUFF_SIZE 255
 #define WRITE_BUFF_SIZE 4096
 #define MAX_CAND 15
@@ -69,6 +70,9 @@ typedef struct {
     int bestRev;
     int bestCycle;
     int timeLimit;
+    long secStart;
+    long secEnd;
+    long long timeChecks;
     int minT;
     int nProcessed;
     bool doReverse;
@@ -96,6 +100,8 @@ void updateCityGains(KOptData *data, double gain, int k);
 void writeBestOpt(KOptData *data, double gain, int k, int cycle);
 
 double gainKOptMove(KOptData *data, int k);
+
+bool timeLimitExceeded(KOptData *data);
 
 int patchCycles(KOptData *data, int k);
 
@@ -308,8 +314,10 @@ void initCityGain(CityGain cityGain[]) {
 void *kOptStart(void *arg) {
     KOptData *data = (KOptData *) arg;
     Node **t = data->t;
-    struct timeval start, end;
+    struct timeval start;
     gettimeofday(&start, NULL);
+    data->secStart = start.tv_sec;
+    data->timeChecks = 1;
     for (int i = 0; i < data->orderSize; i++) {
         Node *t1 = &data->nodes[data->order[i]];
         for (int x1 = 0; x1 < 2; x1++) {
@@ -324,12 +332,9 @@ void *kOptStart(void *arg) {
             if (!data->isFindMax && data->maxGain > E) {
                 return NULL;
             }
-            if (data->timeLimit != 0) {
-                gettimeofday(&end, NULL);
-                if (end.tv_sec - start.tv_sec > data->timeLimit) {
-                    data->nProcessed = i + 1;
-                    return NULL;
-                }
+            if (timeLimitExceeded(data)) {
+                data->nProcessed = i + 1;
+                return NULL;
             }
         }
     }
@@ -396,6 +401,9 @@ void kOptMovRec(KOptData *data, int k) {
                     return;
                 }
             }
+            if (timeLimitExceeded(data)) {
+                return;
+            }
         }
     }
 }
@@ -436,6 +444,9 @@ int patchCycles(KOptData *data, int k) {
 
             patchCyclesRec(data, k, 2, M, curCycle, p, cycle, size);
             if (!data->isFindMax && data->maxGain > E) {
+                return M;
+            }
+            if (timeLimitExceeded(data)) {
                 return M;
             }
         }
@@ -639,6 +650,23 @@ int shortestCycle(KOptData *data, int M, int k, PStruct p[], const int cycle[], 
         }
     }
     return minCycle;
+}
+
+bool timeLimitExceeded(KOptData *data) {
+    if (data->timeLimit == 0) {
+        return false;
+    }
+    data->timeChecks++;
+    if (data->timeChecks % TIME_CHECK_FREQ == 0) {
+        struct timeval t;
+        gettimeofday(&t, NULL);
+        data->secEnd = t.tv_sec;
+    }
+    if (data->secEnd - data->secStart >= data->timeLimit) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 double gainKOptMove(KOptData *data, int k) {
