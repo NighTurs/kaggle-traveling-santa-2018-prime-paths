@@ -43,13 +43,6 @@ typedef struct {
 } PStruct;
 
 typedef struct {
-    Node *added1, *added2;
-    Node *deleted1, *deleted2;
-} NodeChange;
-
-
-typedef struct {
-    NodeChange nodeChanges[NUM_CITIES];
     int solTried[NUM_CITIES];
     int solTarget;
     int curSol;
@@ -64,6 +57,10 @@ typedef struct {
     double dist[MAX_K * 2 + 1];
     PStruct p[MAX_K * 2 + 1];
     int q[MAX_K * 2 + 1];
+    Node *deleted[MAX_K * 2 + 1];
+    int nDeleted;
+    Node *added[MAX_K * 2 + 1];
+    int nAdded;
     double maxGain;
     int maxK;
     int cycleMax;
@@ -163,7 +160,7 @@ void shuffle(int *array, size_t n);
 
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
 int main(int argc, char **argv) {
-    srand(342123);
+    srand(1206102);
     readCities("cities.csv");
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
@@ -179,15 +176,16 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     struct timeval start, end;
     struct timeval start2, end2;
     pthread_t thread_id[nThreads];
-    KOptData basic;
+    KOptData *basic = (KOptData *) malloc(sizeof(KOptData));
     KOptData *datas[nThreads];
-    int order[NUM_CITIES - 1];
+    int *order = malloc(sizeof(int) * (NUM_CITIES - 1));
 
-    memset(basic.solTried, 0, sizeof(basic.solTried));
+    memset(basic->solTried, 0, sizeof(basic->solTried));
     for (int i = 0; i < nThreads; i++) {
         datas[i] = (KOptData *) malloc(sizeof(KOptData));
-        memset(datas[i]->nodeChanges, 0, sizeof(datas[i]->nodeChanges));
         datas[i]->isFindMax = true;
+        datas[i]->nDeleted = 0;
+        datas[i]->nAdded = 0;
     }
 
     for (int i = 0; i < NUM_CITIES - 1; i++) {
@@ -208,39 +206,33 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     outer_loop:
     while (true) {
         shuffle(order, NUM_CITIES - 1);
-        basic.nodes = nodesBest;
-        basic.startNode = &nodesBest[0];
-        basic.order = order;
-        basic.orderSize = NUM_CITIES - 1;
-        basic.maxK = 7;
-        basic.cycleMax = NUM_CITIES;
-        basic.maxGain = 0;
-        basicKOptStart(&basic);
+        basic->nodes = nodesBest;
+        basic->startNode = &nodesBest[0];
+        basic->order = order;
+        basic->orderSize = NUM_CITIES - 1;
+        basic->maxK = 7;
+        basic->cycleMax = NUM_CITIES;
+        basic->maxGain = 0;
+        basic->nDeleted = 0;
+        basic->nAdded = 0;
+        basicKOptStart(basic);
 
-        for (int i = 0; i < NUM_CITIES; i++) {
-            if (basic.nodeChanges[i].added1 != 0 || basic.nodeChanges[i].added2 != 0 ||
-                basic.nodeChanges[i].deleted1 != 0 ||
-                basic.nodeChanges[i].deleted2 != 0) {
-                exit(1);
-            }
-        }
-
-        calcNewNodes(basic.tBest, basic.inclBest, basic.bestK, basic.bestRev, nodesBest, nodesCand, tour);
+        calcNewNodes(basic->tBest, basic->inclBest, basic->bestK, basic->bestRev, nodesBest, nodesCand, tour);
         double basicCandCost = basicTourCost(nodesCand);
 
-        for (int h = 1; h <= basic.bestK * 2; h++) {
-            if (basic.inclBest[h] < h) {
+        for (int h = 1; h <= basic->bestK * 2; h++) {
+            if (basic->inclBest[h] < h) {
                 continue;
             }
-            Node *a = &nodesCand[basic.tBest[h]->cityId];
-            Node *b = &nodesCand[basic.tBest[basic.inclBest[h]]->cityId];
+            Node *a = &nodesCand[basic->tBest[h]->cityId];
+            Node *b = &nodesCand[basic->tBest[basic->inclBest[h]]->cityId];
             for (int i = 0; i < nThreads; i++) {
                 markDeleted(datas[i], a, b);
             }
         }
         printf("Trying improvement CandCost=%.3lf Gain=%.3lf GainDiff=%.3lf K=%d\n", basicCandCost,
-               basic.maxGain,
-               basic.maxGain - (basicBestCost - basicCandCost), basic.bestK);
+               basic->maxGain,
+               basic->maxGain - (basicBestCost - basicCandCost), basic->bestK);
         fflush(stdout);
 
         gettimeofday(&start, NULL);
@@ -260,6 +252,10 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                 cur->maxGain = 0;
                 cur->timeLimit = timeLimit;
                 cur->doReverse = false;
+                if (iter > 0 && (cur->nAdded != 0 || cur->nDeleted != 0)) {
+                    printf("Added Deleted leak");
+                    exit(1);
+                }
                 pthread_create(&thread_id[i], NULL, kOptStart, (void *) cur);
             }
 
@@ -280,24 +276,14 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             gettimeofday(&end2, NULL);
 
             if (iter == 0) {
-                for (int h = 1; h <= basic.bestK * 2; h++) {
-                    if (basic.inclBest[h] < h) {
+                for (int h = 1; h <= basic->bestK * 2; h++) {
+                    if (basic->inclBest[h] < h) {
                         continue;
                     }
-                    Node *a = &nodesCand[basic.tBest[h]->cityId];
-                    Node *b = &nodesCand[basic.tBest[basic.inclBest[h]]->cityId];
+                    Node *a = &nodesCand[basic->tBest[h]->cityId];
+                    Node *b = &nodesCand[basic->tBest[basic->inclBest[h]]->cityId];
                     for (int i = 0; i < nThreads; i++) {
                         unmarkDeleted(datas[i], a, b);
-                    }
-                }
-            }
-
-            for (int h = 0; h < nThreads; h++) {
-                for (int i = 0; i < NUM_CITIES; i++) {
-                    if (datas[h]->nodeChanges[i].added1 != 0 || datas[h]->nodeChanges[i].added2 != 0 ||
-                        datas[h]->nodeChanges[i].deleted1 != 0 ||
-                        datas[h]->nodeChanges[i].deleted2 != 0) {
-                        exit(1);
                     }
                 }
             }
@@ -1067,74 +1053,44 @@ double gainKOptMove(KOptData *data, int k) {
 }
 
 void markAdded(KOptData *data, Node *t1, Node *t2) {
-    NodeChange *n1 = &data->nodeChanges[t1->cityId];
-    NodeChange *n2 = &data->nodeChanges[t2->cityId];
-    if (!n1->added1) {
-        n1->added1 = t2;
-    } else if (!n1->added2) {
-        n1->added2 = t2;
-    }
-    if (!n2->added1) {
-        n2->added1 = t1;
-    } else if (!n2->added2) {
-        n2->added2 = t1;
-    }
+    data->nAdded++;
+    data->added[data->nAdded * 2 - 1] = t1;
+    data->added[data->nAdded * 2] = t2;
 }
 
 void unmarkAdded(KOptData *data, Node *t1, Node *t2) {
-    NodeChange *n1 = &data->nodeChanges[t1->cityId];
-    NodeChange *n2 = &data->nodeChanges[t2->cityId];
-    if (n1->added1 == t2) {
-        n1->added1 = 0;
-    } else if (n1->added2 == t2) {
-        n1->added2 = 0;
-    }
-    if (n2->added1 == t1) {
-        n2->added1 = 0;
-    } else if (n2->added2 == t1) {
-        n2->added2 = 0;
-    }
+    data->nAdded--;
 }
 
 
 bool isAdded(KOptData *data, Node *t1, Node *t2) {
-    NodeChange *n = &data->nodeChanges[t1->cityId];
-    return n->added1 == t2 || n->added2 == t2;
+    Node **added = data->added;
+    for (int i = 1; i <= data->nAdded; i++) {
+        if ((added[i * 2 - 1] == t1 && added[i * 2] == t2) || (added[i * 2 - 1] == t2 && added[i * 2] == t1)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void markDeleted(KOptData *data, Node *t1, Node *t2) {
-    NodeChange *n1 = &data->nodeChanges[t1->cityId];
-    NodeChange *n2 = &data->nodeChanges[t2->cityId];
-    if (!n1->deleted1) {
-        n1->deleted1 = t2;
-    } else if (!n1->deleted2) {
-        n1->deleted2 = t2;
-    }
-    if (!n2->deleted1) {
-        n2->deleted1 = t1;
-    } else if (!n2->deleted2) {
-        n2->deleted2 = t1;
-    }
+    data->nDeleted++;
+    data->deleted[data->nDeleted * 2 - 1] = t1;
+    data->deleted[data->nDeleted * 2] = t2;
 }
 
 void unmarkDeleted(KOptData *data, Node *t1, Node *t2) {
-    NodeChange *n1 = &data->nodeChanges[t1->cityId];
-    NodeChange *n2 = &data->nodeChanges[t2->cityId];
-    if (n1->deleted1 == t2) {
-        n1->deleted1 = 0;
-    } else if (n1->deleted2 == t2) {
-        n1->deleted2 = 0;
-    }
-    if (n2->deleted1 == t1) {
-        n2->deleted1 = 0;
-    } else if (n2->deleted2 == t1) {
-        n2->deleted2 = 0;
-    }
+    data->nDeleted--;
 }
 
 bool isDeleted(KOptData *data, Node *t1, Node *t2) {
-    NodeChange *n = &data->nodeChanges[t1->cityId];
-    return n->deleted1 == t2 || n->deleted2 == t2;
+    Node **deleted = data->deleted;
+    for (int i = 1; i <= data->nDeleted; i++) {
+        if ((deleted[i * 2 - 1] == t1 && deleted[i * 2] == t2) || (deleted[i * 2 - 1] == t2 && deleted[i * 2] == t1)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int pCmp(const void *a, const void *b) {
