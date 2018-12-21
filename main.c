@@ -22,7 +22,7 @@
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
 #define SHORT_CYCLE_SAFE 100
-#define CYCLE_HIST_SIZE 20
+#define CYCLE_HIST_SIZE 30
 
 typedef struct {
     double x, y;
@@ -224,7 +224,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         int time = 0;
         int processed = 0;
         double maxGain = 0;
-        int itK = 2;
+        int itK = 4;
         gettimeofday(&start, NULL);
         while (time < timeLimit) {
             for (int i = 0; i < nThreads; i++) {
