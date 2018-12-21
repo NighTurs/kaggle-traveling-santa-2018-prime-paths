@@ -494,6 +494,7 @@ int patchCycles(KOptData *data, int k) {
             }
         }
     }
+    return M;
 }
 
 void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[]) {
