@@ -21,8 +21,6 @@
 #define MAX_K 50
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
-#define SHORT_CYCLE_SAFE 100
-#define CYCLE_HIST_SIZE 30
 
 typedef struct {
     double x, y;
