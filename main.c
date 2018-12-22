@@ -468,6 +468,7 @@ int basicPatchCycles(KOptData *data, int k, double gain) {
             }
         }
     }
+    return M;
 }
 
 void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[],
@@ -746,6 +747,7 @@ int patchCycles(KOptData *data, int k) {
             }
         }
     }
+    return M;
 }
 
 void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p[], int cycle[], int size[]) {
