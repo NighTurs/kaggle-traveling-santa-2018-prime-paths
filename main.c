@@ -172,10 +172,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     pthread_t thread_id[nThreads];
     KOptData *datas[nThreads];
     int order[NUM_CITIES - 1];
-    int cycleHist[CYCLE_HIST_SIZE];
-    memset(cycleHist, 0, sizeof(cycleHist));
-    int histIdx = 0;
-    cycleHist[histIdx] = cycleLen;
 
     for (int i = 0; i < nThreads; i++) {
         datas[i] = (KOptData *) malloc(sizeof(KOptData));
@@ -200,14 +196,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             order[i] = i + 1;
         }
         shuffle(order, NUM_CITIES - 1);
-        int curCycleLen = 0;
-        for (int i = 0; i < CYCLE_HIST_SIZE; i++) {
-            if (curCycleLen < cycleHist[i]) {
-                curCycleLen = cycleHist[i];
-            }
-        }
         int chunk = (NUM_CITIES - 1 + nThreads) / nThreads;
-        curCycleLen += SHORT_CYCLE_SAFE;
 
         double maxGain = 0;
         gettimeofday(&start, NULL);
@@ -216,7 +205,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             cur->order = order + (i * chunk);
             cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
             cur->maxK = itK;
-            cur->cycleMax = curCycleLen;
+            cur->cycleMax = cycleLen;
             cur->maxGain = 0;
             cur->timeLimit = timeLimit;
             cur->doReverse = false;
@@ -255,17 +244,9 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             processed = 0;
         }
 
-        if (bestData->bestCycle > 0) {
-            histIdx++;
-            if (histIdx >= CYCLE_HIST_SIZE) {
-                histIdx = 0;
-            }
-            cycleHist[histIdx] = bestData->bestCycle;
-        }
-
         calcNewNodes(bestData->tBest, bestData->inclBest, bestData->bestK, bestData->bestRev, nodes, nodes, tour);
         double newCost = getTourCost(nodes);
-        printf("Iter=%d Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d MaxCycle=%d\n",
+        printf("Iter=%d Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d Processed=%d\n",
                iter,
                end.tv_sec - start.tv_sec,
                bestData->maxGain,
@@ -273,7 +254,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                newCost,
                bestData->bestK,
                bestData->bestCycle,
-               curCycleLen
+               processed
         );
         fflush(stdout);
         writeSubmission(subFile, nodes);
