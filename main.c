@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
     readCities("cities.csv");
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
-//    readTourSubmission(argv[2], tour);
+    readTourSubmission(argv[2], tour);
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
