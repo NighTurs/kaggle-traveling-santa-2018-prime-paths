@@ -153,7 +153,7 @@ void shuffle(int *array, size_t n);
 
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
 int main(int argc, char **argv) {
-    srand(1234);
+    srand(98741);
     readCities("cities.csv");
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
@@ -233,13 +233,11 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         if (maxGain < E) {
             printf("No improvement ItK=%d MaxGain=%.3lf Processed=%d\n", itK, maxGain, processed);
             fflush(stdout);
-            if (processed >= NUM_CITIES) {
+            if (processed >= NUM_CITIES - 1) {
                 processed = 0;
                 itK++;
             }
             continue;
-        } else {
-            processed = 0;
         }
 
         calcNewNodes(bestData->tBest, bestData->inclBest, bestData->bestK, bestData->bestRev, nodes, nodes, tour);
@@ -254,6 +252,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                bestData->bestCycle,
                processed
         );
+        processed = 0;
         fflush(stdout);
         writeSubmission(subFile, nodes);
         iter++;
