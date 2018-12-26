@@ -200,7 +200,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     int maxGainTh = 0;
 
     KOptData *bestData = NULL;
-    double basicBestCost = basicTourCost(nodes);
     Node *nodesBest = nodes;
     Node *nodesCand = nodes1;
     int minStep, maxStep;
@@ -233,8 +232,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             }
         }
 
-        double basicCandCost = basicTourCost(nodesCand);
-
         for (int h = 1; h <= basic->bestK * 2; h++) {
             if (basic->inclBest[h] < h) {
                 continue;
@@ -245,9 +242,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                 markDeleted(datas[i], a, b);
             }
         }
-        printf("Trying improvement CandCost=%.3lf Gain=%.3lf GainDiff=%.3lf K=%d\n", basicCandCost,
-               basic->maxGain,
-               basic->maxGain - (basicBestCost - basicCandCost), basic->bestK);
+        printf("Trying improvement Gain=%.3lf K=%d\n",basic->maxGain, basic->bestK);
         fflush(stdout);
 
         gettimeofday(&start, NULL);
@@ -334,7 +329,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
 
         double gainDiff = getTourCost(nodesBest) - getTourCost(nodesCand);
         if (gainDiff > E) {
-            printf("Time=%ld Gain=%.3lf Cost=%.3lf\n",
+            printf("Improvement Time=%ld Gain=%.3lf Cost=%.3lf\n",
                    end.tv_sec - start.tv_sec,
                    gainDiff,
                    getTourCost(nodesCand)
@@ -343,7 +338,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             Node *z = nodesBest;
             nodesBest = nodesCand;
             nodesCand = z;
-            basicBestCost = basicTourCost(nodesBest);
             goto outer_loop;
         } else {
             printf("No improvement %.3lf\n", gainDiff);
