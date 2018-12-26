@@ -84,7 +84,7 @@ Node nodes[NUM_CITIES];
 Cand candidates[NUM_CITIES][MAX_CAND + 1];
 #define CAND_SIZE(x) (candidates[x][0].city)
 
-void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen);
+void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen, int initialK);
 
 void *kOptStart(void *arg);
 
@@ -161,11 +161,11 @@ int main(int argc, char **argv) {
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
-    improveTour(atoi(argv[4]), argv[3], atoi(argv[5]), atoi(argv[6]));
+    improveTour(atoi(argv[4]), argv[3], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]));
     return 0;
 }
 
-void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen) {
+void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen, int initialK) {
     struct timeval start, end;
     pthread_t thread_id[nThreads];
     KOptData *datas[nThreads];
@@ -176,7 +176,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         datas[i]->nodes = nodes;
         datas[i]->startNode = &nodes[0];
         datas[i]->isFindMax = true;
-        datas[i]->pureGainLimit = 0;
+        datas[i]->pureGainLimit = -1;
         datas[i]->nDeleted = 0;
         datas[i]->nAdded = 0;
     }
@@ -184,7 +184,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     KOptData *bestData = (KOptData *) malloc(sizeof(KOptData));
     int maxGainTh = 0;
     int iter = 0;
-    int itK = 9;
+    int itK = initialK;
     int processed = 0;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
