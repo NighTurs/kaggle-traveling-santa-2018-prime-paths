@@ -16,7 +16,7 @@
 #define TIME_CHECK_FREQ 10000
 #define BUFF_SIZE 255
 #define WRITE_BUFF_SIZE 4096
-#define MAX_CAND 15
+#define MAX_CAND 40
 #define PENALTY 1.1
 #define MAX_K 50
 #define ILLEGAL_OPT -1e6
@@ -70,6 +70,8 @@ typedef struct {
     long secEnd;
     long long timeChecks;
     int minT;
+    int minStep;
+    int maxStep;
     double pureGainLimit;
     int nProcessed;
     bool doReverse;
@@ -77,6 +79,7 @@ typedef struct {
 } KOptData;
 
 int tour[NUM_CITIES];
+int tour1[NUM_CITIES];
 int primes[NUM_CITIES];
 Point cities[NUM_CITIES];
 Node nodes[NUM_CITIES];
@@ -143,7 +146,7 @@ void readTourSubmission(const char fileName[], int tour[]);
 
 void writeSubmission(const char fileName[], Node nodes[]);
 
-void buildCandidates(const char fileName[], int const tour[]);
+void buildCandidates(const char fileName[], int const tour1[], int const tour2[]);
 
 double dist(double x1, double y1, double x2, double y2);
 
@@ -153,11 +156,11 @@ void shuffle(int *array, size_t n);
 
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
 int main(int argc, char **argv) {
-    srand(98741);
+    srand(931);
     readCities("cities.csv");
-    readTourLinkern(argv[1], tour);
-    buildCandidates("my2.cand", tour);
+    readTourLinkern(argv[1], tour1);
     readTourSubmission(argv[2], tour);
+    buildCandidates("my2.cand", tour1, tour);
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
@@ -281,6 +284,8 @@ void *kOptStart(void *arg) {
             t[1] = t1;
             t[2] = t2;
             data->minT = 1;
+            data->minStep = t1->step - data->cycleMax;
+            data->maxStep = t1->step + data->cycleMax;
             markDeleted(data, t1, t2);
             kOptMovRec(data, 2, 0);
             unmarkDeleted(data, t1, t2);
@@ -312,7 +317,8 @@ void kOptMovRec(KOptData *data, int k, double pureGain) {
     for (int x3 = 1; x3 <= CAND_SIZE(t2->cityId); x3++) {
         Cand *t3Cand = &(candidates[t2->cityId][x3]);
         Node *t3 = &nodes[t3Cand->city];
-        if (t3->cityId < minT || t3 == t2->from || t3 == t2->to || isAdded(data, t2, t3)) {
+        if (t3->step < data->minStep || t3->step > data->maxStep || t3->cityId < minT || t3 == t2->from ||
+            t3 == t2->to || isAdded(data, t2, t3)) {
             continue;
         }
         t[2 * k - 1] = t3;
@@ -327,7 +333,7 @@ void kOptMovRec(KOptData *data, int k, double pureGain) {
         markAdded(data, t2, t3);
         for (int x4 = 0; x4 < 2; x4++) {
             Node *t4 = x4 == 0 ? t3->to : t3->from;
-            if (t4->cityId < minT || isDeleted(data, t3, t4)) {
+            if (t4->step < data->minStep || t4->step > data->maxStep || t4->cityId < minT || isDeleted(data, t3, t4)) {
                 continue;
             }
             t[2 * k] = t4;
@@ -420,7 +426,8 @@ int patchCycles(KOptData *data, int k, double pureGain) {
         Node *sStop = data->t[p[2 * i + 1].v];
         for (Node *s1 = sStart; s1 != sStop; s1 = s2) {
             s2 = s1->to;
-            if (s1->cityId == 0 || s2->cityId == 0) {
+            if (s1->cityId == 0 || s2->cityId == 0 || s1->step < data->minStep ||
+                s1->step > data->maxStep || s2->step < data->minStep || s2->step > data->maxStep) {
                 continue;
             }
             data->t[2 * k + 1] = s1;
@@ -454,7 +461,8 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
     for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
         Cand *s3Cand = &(candidates[s2->cityId][x3]);
         Node *s3 = &data->nodes[s3Cand->city];
-        if (s3->cityId == 0 || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3)
+        if (s3->step < data->minStep || s3->step > data->maxStep || s3->cityId == 0 || s3 == s2->from || s3 == s2->to ||
+            isAdded(data, s2, s3)
             || (newCycle = findCycle(data, s3, k, p, cycle)) == curCycle) {
             continue;
         }
@@ -468,7 +476,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         markAdded(data, s2, s3);
         for (int x4 = 0; x4 < 2; x4++) {
             Node *s4 = x4 == 0 ? s3->to : s3->from;
-            if (s4->cityId == 0 || isDeleted(data, s3, s4)) {
+            if (s4->step < data->minStep || s4->step > data->maxStep || s4->cityId == 0 || isDeleted(data, s3, s4)) {
                 continue;
             }
             t[2 * (k + m)] = s4;
@@ -509,7 +517,6 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 dist[2 * k + 1] = d;
                 dist[2 * (k + m)] = d;
                 double gain = gainKOptMove(data, k + m);
-
                 if (gain > data->maxGain) {
                     writeBestOpt(data, gain, k + m, size[curCycle]);
                 }
@@ -531,7 +538,8 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
     for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
         Cand *s3Cand = &(candidates[s2->cityId][x3]);
         Node *s3 = &data->nodes[s3Cand->city];
-        if (s3->cityId == 0 || s3 == s2->from || s3 == s2->to || isAdded(data, s2, s3)) {
+        if (s3->step < data->minStep || s3->step > data->maxStep || s3->cityId == 0 || s3 == s2->from || s3 == s2->to ||
+            isAdded(data, s2, s3)) {
             continue;
         }
         t[2 * (k + m) - 1] = s3;
@@ -543,7 +551,7 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
         }
         for (int x4 = 0; x4 < 2; x4++) {
             Node *s4 = x4 == 0 ? s3->to : s3->from;
-            if (s4->cityId == 0 || isDeleted(data, s3, s4)) {
+            if (s4->step < data->minStep || s4->step > data->maxStep || s4->cityId == 0 || isDeleted(data, s3, s4)) {
                 continue;
             }
             t[2 * (k + m)] = s4;
@@ -551,7 +559,8 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
             for (int x5 = 1; x5 <= CAND_SIZE(s4->cityId); x5++) {
                 Cand *s5Cand = &(candidates[s4->cityId][x5]);
                 Node *s5 = &data->nodes[s5Cand->city];
-                if (s5->cityId == 0 || s5 == s4->from || s5 == s4->to || isAdded(data, s4, s5) ||
+                if (s5->step < data->minStep || s5->step > data->maxStep || s5->cityId == 0 || s5 == s4->from ||
+                    s5 == s4->to || isAdded(data, s4, s5) ||
                     (newCycle = findCycle(data, s5, k, p, cycle)) == curCycle) {
                     continue;
                 }
@@ -566,7 +575,8 @@ void patchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStruct p
                 }
                 for (int x6 = 0; x6 < 2; x6++) {
                     Node *s6 = x6 == 0 ? s5->to : s5->from;
-                    if (s6->cityId == 0 || isDeleted(data, s5, s6) || isAdded(data, s6, s1)) {
+                    if (s6->step < data->minStep || s6->step > data->maxStep || s6->cityId == 0 ||
+                        isDeleted(data, s5, s6) || isAdded(data, s6, s1)) {
                         continue;
                     }
                     t[2 * (k + m) + 2] = s6;
@@ -1015,7 +1025,7 @@ void addCandidate(int a, int b) {
     candidates[a][CAND_SIZE(a)].dist = distCity(a, b);
 }
 
-void buildCandidates(const char fileName[], int const tour[]) {
+void buildCandidates(const char fileName[], int const tour1[], int const tour2[]) {
     FILE *fp;
     char buff[BUFF_SIZE];
     int cityA, cityB, num, pos, posOffset, alpha;
@@ -1029,6 +1039,7 @@ void buildCandidates(const char fileName[], int const tour[]) {
             break;
         }
         sscanf(buff, "%d %d %d %n", &cityA, &cityB, &num, &pos);
+        num = num > 3 ? 3 : num;
         cityA--;
         cityB--;
         candidates[cityA][0].city = num;
@@ -1040,13 +1051,14 @@ void buildCandidates(const char fileName[], int const tour[]) {
             candidates[cityA][i].dist = distCity(cityA, cityB);
         }
     }
+
     for (int i = 0; i < NUM_CITIES; i++) {
-        int from = tour[i];
+        int from = tour1[i];
         int to;
         if (i == NUM_CITIES - 1) {
             to = 0;
         } else {
-            to = tour[i + 1];
+            to = tour1[i + 1];
         }
         if (!candContains(from, to)) {
             addCandidate(from, to);
@@ -1055,15 +1067,22 @@ void buildCandidates(const char fileName[], int const tour[]) {
             addCandidate(to, from);
         }
     }
+
     for (int i = 0; i < NUM_CITIES; i++) {
-        for (int h = 1; h <= CAND_SIZE(i); h++) {
-            int to = candidates[i][h].city;
-            if (!candContains(to, i)) {
-                addCandidate(to, i);
-            }
+        int from = tour2[i];
+        int to;
+        if (i == NUM_CITIES - 1) {
+            to = 0;
+        } else {
+            to = tour2[i + 1];
+        }
+        if (!candContains(from, to)) {
+            addCandidate(from, to);
+        }
+        if (!candContains(to, from)) {
+            addCandidate(to, from);
         }
     }
-    fclose(fp);
 }
 
 void readTourLinkern(const char fileName[], int tour[]) {
