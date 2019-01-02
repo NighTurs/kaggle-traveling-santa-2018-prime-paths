@@ -2,6 +2,7 @@
 *								 Definitions							 *
 \******************************************************************************/
 #include <stdio.h>
+#include <math.h>
 
 #define NUM_CITIES 197769
 #define BUFF_SIZE 255
@@ -21,6 +22,10 @@ extern int n_cities;                            // number of cities
 extern char *prob_name;                            // name of the file for the weight matrix
 
 /* Function declaration */
+double dist(double x1, double y1, double x2, double y2);
+
+double distCity(int a, int b);
+
 double gpx(int *solution_blue, int *solution_red, int *offspring);
 
 int *aloc_vectori(int lines);
@@ -30,6 +35,8 @@ double *aloc_vectord(int lines);
 int **aloc_matrixi(int lines, int collums);
 
 void desaloc_matrixi(int **Matrix, int lines);
+
+void read_problem(const char* filename);
 
 void rand_perm(int *inp, int *out, int size);
 

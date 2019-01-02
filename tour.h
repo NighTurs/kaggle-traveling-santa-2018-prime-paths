@@ -770,14 +770,6 @@ double calcPenalty(int a, int step) {
     return (!primes[a] && step % 10 == 0) ? PENALTY : 1;
 }
 
-double dist(double x1, double y1, double x2, double y2) {
-    return sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
-}
-
-double distCity(int a, int b) {
-    return dist(cities[a].x, cities[a].y, cities[b].x, cities[b].y);
-}
-
 double fitness(int a, int b, int step) {
     return distCity(a, b) * calcPenalty(a, step);
 }
@@ -1101,6 +1093,12 @@ void candidates::merge_components() {
         }
     }
 
+    for (int i = 0; i < n_cand; i++) {
+        if (test[i] > 0) {
+            printf("%d %d %d\n", i, n_inputs[i], n_outputs[i]);
+        }
+    }
+
     delete[] enabled;
     delete[] color;
     delete[] b;
@@ -1112,6 +1110,12 @@ double memory[NUM_CITIES + 30000][2][10][2];
 double
 candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list) {
     int i, *sol_blue_index, *sol_red_index;
+
+    for (i = 0; i < n_cand; i++) {
+        if (test[i] > 0 && blue[i].first_entry.time > blue[i].last_exit.time) {
+            test[i] = 0;
+        }
+    }
 
     merge_components();
 
@@ -1166,7 +1170,7 @@ void candidates::print(void) {
     int i;
 
     for (i = 0; i < n_cand; i++)
-        if (size[i] > 1 && !test[i]) {
+        if (size[i] > 1 && test[i]) {
             cout << "Candidate (" << i << "), Size: " << size[i] << ", Number of inputs: " << n_inputs[i] << endl;
             cout << "  blue tour: First Entry: " << blue[i].first_entry.num << " , " << blue[i].first_entry.time
                  << "  Last Exit: " << blue[i].last_exit.num << " , " << blue[i].last_exit.time << endl;
