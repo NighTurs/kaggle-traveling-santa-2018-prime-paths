@@ -249,7 +249,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                 markDeleted(datas[i], a, b);
             }
         }
-        printf("Trying improvement Gain=%.3lf K=%d\n",basic->maxGain, basic->bestK);
+        printf("Trying improvement Gain=%.3lf K=%d\n", basic->maxGain, basic->bestK);
         fflush(stdout);
 
         gettimeofday(&start, NULL);
