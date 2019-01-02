@@ -821,7 +821,7 @@ double gpx(int *solution_blue, int *solution_red, int *offspring )
 	//candidate->print();			// print the components
 
 	// Selecting the best between the blue and red path in each component
-	fitness_offspring=candidate->off_gen(solution_blue, solution_red, solution_blue_p2, solution_red_p2, offspring, label_list);
+	fitness_offspring=candidate->off_gen(solution_blue_p2, solution_red_p2, offspring, label_list);
 
 
 	delete candidate;

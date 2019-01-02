@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <limits.h>
 #include <pthread.h>
+#include "defs.h"
 
 #define NUM_CITIES 197769
 #define TIME_CHECK_FREQ 10000

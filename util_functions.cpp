@@ -18,7 +18,7 @@ int **aloc_matrixi(int lines , int collums)
 		Matrix[i] = new int[collums];
 	}
 	if (!Matrix) {
-		cout<<"Allocation Error!"<<endl;
+		printf("Allocation Error!");
 		exit(1);
 	}
 
@@ -35,7 +35,7 @@ int *aloc_vectori(int lines)
 
 	vector = new int[lines];
 	if (!vector) {
-		cout<<"Allocation Error!"<<endl;
+		printf("Allocation Error!");
 		exit(1);
 	}
 	return vector;
@@ -51,7 +51,7 @@ double *aloc_vectord(int lines)
 
 	vector = new double[lines];
 	if (!vector) {
-		cout<<"Allocation Error!"<<endl;
+		printf("Allocation Error!");
 		exit(1);
 	}
 	return vector;

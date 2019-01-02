@@ -60,7 +60,7 @@ public:
 
     void merge_components();
 
-    double off_gen(int *sol_blue_org, int *sol_red_org, int *sol_blue, int *sol_red, int *offspring, int *label_list);
+    double off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list);
 
     void createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
                     int *label_list, int takenBy[], int restTakenBy,
@@ -1205,7 +1205,7 @@ void candidates::merge_components() {
 
 // select between the blue and red paths for each component
 double
-candidates::off_gen(int *sol_blue_org, int *sol_red_org, int *sol_blue, int *sol_red, int *offspring, int *label_list) {
+candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list) {
     int i, i_l, i_h, k, aux, aux2, *select_cand, select_rest, *offspring_p2, *sol_blue_index, *sol_red_index, v_aux;
     double blue_fitness_rest, red_fitness_rest, fitness;
 
@@ -1220,14 +1220,6 @@ candidates::off_gen(int *sol_blue_org, int *sol_red_org, int *sol_blue, int *sol
     for (i = 0; i < n; i++) {
         sol_blue_index[sol_blue[i]] = i;
         sol_red_index[sol_red[i]] = i;
-    }
-
-    int *sol_blue_org_index = new int[n];
-    int *sol_red_org_index = new int[n];
-
-    for (i = 0; i < n; i++) {
-        sol_blue_org_index[sol_blue_org[i]] = i;
-        sol_red_org_index[sol_red_org[i]] = i;
     }
 
     int takenBy[n];
@@ -1249,10 +1241,8 @@ candidates::off_gen(int *sol_blue_org, int *sol_red_org, int *sol_blue, int *sol
     delete[] tour;
     delete[] sol_red_index;
     delete[] sol_blue_index;
-    delete[] sol_blue_org_index;
-    delete[] sol_red_org_index;
 
-    return fitness;
+    return cost;
 }
 
 
