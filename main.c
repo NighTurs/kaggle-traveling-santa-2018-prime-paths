@@ -25,10 +25,6 @@
 #define KICK_E 0.000
 
 typedef struct {
-    double x, y;
-} Point;
-
-typedef struct {
     int city;
     double dist;
 } Cand;
@@ -83,8 +79,6 @@ typedef struct {
 } KOptData;
 
 int tour[NUM_CITIES];
-int primes[NUM_CITIES];
-Point cities[NUM_CITIES];
 Node nodes[NUM_CITIES];
 Node nodes1[NUM_CITIES];
 // At [i][0].city is size of candidates for city i

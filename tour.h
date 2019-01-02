@@ -11,11 +11,6 @@
 
 using cap7_listaadj_autoreferencia::Grafo;
 
-#define NUM_CITIES 197769
-#define BUFF_SIZE 255
-#define PENALTY 1.1
-#define WRITE_BUFF_SIZE 4096
-
 class candidates {
 private:
     typedef struct {
@@ -771,14 +766,6 @@ void candidates::fusionB(int *sol_blue, int *sol_red) {
 
 }
 
-
-typedef struct {
-    double x, y;
-} Point;
-
-int primes[NUM_CITIES];
-Point cities[NUM_CITIES];
-
 double calcPenalty(int a, int step) {
     return (!primes[a] && step % 10 == 0) ? PENALTY : 1;
 }
@@ -793,60 +780,6 @@ double distCity(int a, int b) {
 
 double fitness(int a, int b, int step) {
     return distCity(a, b) * calcPenalty(a, step);
-}
-
-void fillPrimes() {
-    memset(primes, 1, sizeof(primes));
-
-    primes[0] = 0;
-    primes[1] = 0;
-    for (int i = 2; i < sqrt(NUM_CITIES) + 1; i++) {
-        if (!primes[i]) {
-            continue;
-        }
-        for (int h = i + i; h < NUM_CITIES; h += i) {
-            primes[h] = 0;
-        }
-    }
-}
-
-void readCities(const char fileName[]) {
-    FILE *fp;
-    char buff[BUFF_SIZE];
-    int id;
-    double x, y;
-
-    fp = fopen(fileName, "r");
-    // First line is header
-    fgets(buff, BUFF_SIZE, fp);
-    while (fgets(buff, BUFF_SIZE, fp)) {
-        sscanf(buff, "%d,%lf,%lf", &id, &x, &y);
-        cities[id].x = x;
-        cities[id].y = y;
-    }
-    fclose(fp);
-}
-
-void writeSubmission(const char fileName[], int tour[]) {
-    FILE *fp = fopen(fileName, "w");
-    char file_buffer[WRITE_BUFF_SIZE + 64];
-    int buffer_count = 0;
-
-    buffer_count += sprintf(&file_buffer[buffer_count], "Path\n");
-    for (int i = 0; i < NUM_CITIES; i++) {
-        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", tour[i]);
-        if (buffer_count >= WRITE_BUFF_SIZE) {
-            fwrite(file_buffer, WRITE_BUFF_SIZE, 1, fp);
-            buffer_count -= WRITE_BUFF_SIZE;
-            memcpy(file_buffer, &file_buffer[WRITE_BUFF_SIZE], buffer_count);
-        }
-    }
-    buffer_count += sprintf(&file_buffer[buffer_count], "0");
-
-    if (buffer_count > 0) {
-        fwrite(file_buffer, 1, buffer_count, fp);
-    }
-    fclose(fp);
 }
 
 int nextCity(int *sol_idx, int n, int curCity, int prevCity) {
@@ -878,12 +811,14 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
     int curCity = curCityIn;
     int step = stepIn;
     if (test[id[curCity]] > 0) {
-//        if (takenBy[id[curCity]] == 0) {
-//            exit(1);
-//        }
-//        if (curCity != blue[id[curCity]].first_entry.num && curCity != blue[id[curCity]].last_exit.num) {
-//            exit(1);
-//        }
+        if (takenBy[id[curCity]] == 0) {
+            printf("Algorithm inconsistency 2");
+            exit(1);
+        }
+        if (curCity != blue[id[curCity]].first_entry.num && curCity != blue[id[curCity]].last_exit.num) {
+            printf("Algorithm inconsistency 3");
+            exit(1);
+        }
         int taken = takenBy[id[curCity]] == 2 ? 1 : 0;
         if (memory[curCity][taken][step % 10][0] > 1e-9) {
             return memory[curCity][taken][step % 10][0];
@@ -892,7 +827,6 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
 
     double cost = 0;
     int count = 0;
-    bool didJumps = false;
     while (true) {
         count++;
         if (test[id[curCityIn]] > 0 && prevCity != curCityIn &&
@@ -904,16 +838,11 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
         int next;
 
         if (test[id[curCity]] > 0 && sol_blue[bNextIdx] != sol_red[rNextIdx]) {
-//            if (curCityIn == 42870 && id[curCity] != id[curCityIn]) {
-//            if (curCityIn == 42870) {
-//                int a = 1;
-//            }
             if (takenBy[id[curCity]] == 1) {
                 next = sol_blue[bNextIdx];
             } else if (takenBy[id[curCity]] == 2) {
                 next = sol_red[rNextIdx];
             } else {
-                didJumps = true;
                 takenBy[id[curCity]] = 1;
                 double d1 = minTour(sol_blue, sol_red, sol_blue_idx, sol_red_idx, label_list, prevCity, curCity, step,
                                     takenBy,
@@ -926,9 +855,10 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
                 if (curCity == blue[id[curCity]].first_entry.num) {
                     next = blue[id[curCity]].last_exit.num;
                 } else {
-//                    if (curCity != blue[id[curCity]].last_exit.num) {
-//                        exit(1);
-//                    }
+                    if (curCity != blue[id[curCity]].last_exit.num) {
+                        printf("Algorithm inconsistency 1");
+                        exit(1);
+                    }
                     next = blue[id[curCity]].first_entry.num;
                 }
                 count += blue[id[curCity]].last_exit.time - blue[id[curCity]].first_entry.time;
@@ -982,9 +912,10 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
         int taken = takenBy[id[curCityIn]] == 2 ? 1 : 0;
         memory[curCityIn][taken][stepIn % 10][0] = cost;
         memory[curCityIn][taken][stepIn % 10][1] = step - stepIn;
-//        if (count != blue[id[curCityIn]].last_exit.time - blue[id[curCityIn]].first_entry.time + 2) {
-//            exit(1);
-//        }
+        if (count != blue[id[curCityIn]].last_exit.time - blue[id[curCityIn]].first_entry.time + 2) {
+            printf("Algorithm inconsistency 4");
+            exit(1);
+        }
     }
     return cost;
 }
@@ -1039,8 +970,6 @@ void candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int 
         }
     }
 }
-
-double memory[NUM_CITIES + 30000][2][10][2];
 
 void candidates::merge_components() {
 
@@ -1139,25 +1068,6 @@ void candidates::merge_components() {
                 }
             }
             if (edges == 2) {
-//                gate_structure first, last;
-//                first.time = NUM_CITIES * 2;
-//                last.time = -1;
-//
-//                for (int i = 0; i < n_cand; i++) {
-//                    if (color[i] != clr) {
-//                        continue;
-//                    }
-//                    if (blue[i].first_entry.time < first.time) {
-//                        first = blue[i].first_entry;
-//                    }
-//                    if (blue[i].last_exit.time > last.time) {
-//                        last = blue[i].last_exit;
-//                    }
-//                }
-//                if (!((first.num == ga.num && last.num == gb.num) || (first.num == gb.num && last.num == ga.num))) {
-//                    exit(1);
-//                }
-
                 if (ga.time < gb.time) {
                     blue[subId].first_entry = ga;
                     blue[subId].last_exit = gb;
@@ -1191,28 +1101,19 @@ void candidates::merge_components() {
         }
     }
 
-    for (int i = 0; i < n_cand; i++) {
-        if (test[i] > 0) {
-            printf("%d %d %d\n", i, n_inputs[i], n_outputs[i]);
-        }
-    }
-
     delete[] enabled;
     delete[] color;
     delete[] b;
 }
 
+double memory[NUM_CITIES + 30000][2][10][2];
 
 // select between the blue and red paths for each component
 double
 candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list) {
-    int i, i_l, i_h, k, aux, aux2, *select_cand, select_rest, *offspring_p2, *sol_blue_index, *sol_red_index, v_aux;
-    double blue_fitness_rest, red_fitness_rest, fitness;
+    int i, *sol_blue_index, *sol_red_index;
 
     merge_components();
-
-    readCities("cities.csv");
-    fillPrimes();
 
     sol_blue_index = new int[n];
     sol_red_index = new int[n];
@@ -1228,17 +1129,31 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
     double cost = minTour(sol_blue, sol_red, sol_blue_index, sol_red_index,
                           label_list,
                           sol_blue[n - 1], 0, 1, takenBy,
-                          2, memory);
+                          1, memory);
 
-    printf("%.5lf\n", cost);
+    createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 1, memory, offspring);
 
-    int *tour = new int[NUM_CITIES];
+    memset(memory, 0, sizeof(double) * NUM_CITIES * 2 * 10 * 2);
 
-    createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 2, memory, tour);
+    double cost2 = minTour(sol_blue, sol_red, sol_blue_index, sol_red_index,
+                           label_list,
+                           sol_blue[n - 1], 0, 1, takenBy,
+                           2, memory);
 
-    writeSubmission("out.csv", tour);
+    if (cost > cost2) {
+        cost = cost2;
+        createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 2, memory, offspring);
+    }
 
-    delete[] tour;
+    int nComponents = 0;
+    for (i = 0; i < n_cand; i++) {
+        if (test[i] > 0) {
+            nComponents++;
+        }
+    }
+
+    printf("GPX recombination Cost=%.5lf Components=%d\n", cost, nComponents);
+
     delete[] sol_red_index;
     delete[] sol_blue_index;
 

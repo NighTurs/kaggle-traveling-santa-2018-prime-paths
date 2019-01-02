@@ -3,7 +3,18 @@
 \******************************************************************************/
 #include <stdio.h>
 
+#define NUM_CITIES 197769
+#define BUFF_SIZE 255
+#define PENALTY 1.1
+#define WRITE_BUFF_SIZE 4096
+
+typedef struct {
+    double x, y;
+} Point;
+
 /* Global variables */
+extern int primes[NUM_CITIES];
+extern Point cities[NUM_CITIES];
 extern double *coord_x, *coord_y;                // coordinates of the cities
 extern int **W;                                    // weight matrix for the ATSP
 extern int n_cities;                            // number of cities
