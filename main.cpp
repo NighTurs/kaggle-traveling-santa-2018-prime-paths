@@ -340,7 +340,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             if (gpx(tour, tour1, tour2) != 1e6) {
                 if (!verifyTour(tour2)) {
                     printf("Bad recombination tour\n");
-                    break;
+                    continue;
                 }
                 buildNodes(tour2, nodesCand);
             }
