@@ -158,6 +158,8 @@ void writeSubmission(const char fileName[], Node nodes[]);
 
 void buildCandidates(const char fileName[], int const tour[]);
 
+bool verifyTour(int const tour[]);
+
 void shuffle(int *array, size_t n, size_t maxSwap);
 
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
@@ -168,6 +170,10 @@ int main(int argc, char **argv) {
     readTourLinkern(argv[1], tour);
     buildCandidates("my2.cand", tour);
     readTourSubmission(argv[2], tour);
+    if (!verifyTour(tour)) {
+        printf("Bad tour\n");
+        return 1;
+    }
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
@@ -327,6 +333,10 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
 
         if (fabs(gainDiff) > E) {
             if (gpx(tour, tour1, tour2) != 1e6) {
+                if (!verifyTour(tour2)) {
+                    printf("Bad recombination tour\n");
+                    break;
+                }
                 buildNodes(tour2, nodesCand);
             }
         }
@@ -1492,6 +1502,17 @@ void readCities(const char fileName[]) {
         cities[id].y = y;
     }
     fclose(fp);
+}
+
+bool verifyTour(int const tour[]) {
+    bool used[NUM_CITIES] {false};
+    for (int i = 0; i < NUM_CITIES; i++) {
+        if (tour[i] >= NUM_CITIES || used[tour[i]]) {
+            return false;
+        }
+        used[tour[i]] = true;
+    }
+    return true;
 }
 
 void shuffle(int *array, size_t n, size_t maxSwap) {
