@@ -57,9 +57,9 @@ public:
 
     double off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list);
 
-    void createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
-                    int *label_list, int takenBy[], int restTakenBy,
-                    double memory[][2][10][2], int tour[]);
+    double createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
+                      int *label_list, int takenBy[], int restTakenBy,
+                      double memory[][2][10][2], int tour[]);
 
     double minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
                    int *label_list, int prevCity, int curCity, int step, int takenBy[], int restTakenBy,
@@ -920,12 +920,13 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
     return cost;
 }
 
-void candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
-                            int *label_list, int takenBy[], int restTakenBy,
-                            double memory[][2][10][2], int tour[]) {
+double candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
+                              int *label_list, int takenBy[], int restTakenBy,
+                              double memory[][2][10][2], int tour[]) {
     int prevCity = 0;
     int curCity = 0;
     int step = 1;
+    double cost = 0;
     while (true) {
         if (curCity < NUM_CITIES) {
             tour[step - 1] = curCity;
@@ -949,6 +950,7 @@ void candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int 
                 }
             }
             if (label_list[curCity] != label_list[next]) {
+                cost += fitness(label_list[curCity], label_list[next], step);
                 step++;
             }
             prevCity = curCity;
@@ -960,6 +962,7 @@ void candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int 
                 next = sol_red[rNextIdx];
             }
             if (label_list[curCity] != label_list[next]) {
+                cost += fitness(label_list[curCity], label_list[next], step);
                 step++;
             }
             prevCity = curCity;
@@ -969,6 +972,7 @@ void candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int 
             break;
         }
     }
+    return cost;
 }
 
 void candidates::merge_components() {
@@ -1139,7 +1143,12 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
         return ILLEGAL;
     }
 
-    createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 1, memory, offspring);
+    double costCtrl = createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 1, memory,
+                                 offspring);
+    if (fabs(cost - costCtrl) > 1e-5) {
+        printf("Algorithm inconsistency 5\n");
+        return ILLEGAL;
+    }
 
     memset(takenBy, 0, sizeof(takenBy));
     memset(memory, 0, sizeof(double) * n * 2 * 10 * 2);
@@ -1152,9 +1161,14 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
         return ILLEGAL;
     }
 
+    costCtrl = createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 2, memory,
+                          offspring);
+    if (fabs(cost2 - costCtrl) > 1e-5) {
+        printf("Algorithm inconsistency 6\n");
+        return ILLEGAL;
+    }
     if (cost > cost2) {
         cost = cost2;
-        createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 2, memory, offspring);
     }
 
     int nComponents = 0;
