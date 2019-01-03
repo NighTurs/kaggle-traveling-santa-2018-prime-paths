@@ -1033,6 +1033,8 @@ void candidates::merge_components() {
         for (int clr = 1; clr < curColor; clr++) {
             int edges = 0;
             int subId = 0;
+            ga.time = INT_MAX;
+            gb.time = -1;
             for (int i = 0; i < n_cand; i++) {
                 if (color[i] != clr) {
                     continue;
@@ -1041,32 +1043,23 @@ void candidates::merge_components() {
                     subId = i;
                 }
                 for (int h = 0; h < n_inputs[i]; h++) {
+                    if (!enabled[i] && ga.time > blue[i].inputs[h].time) {
+                        ga = blue[i].inputs[h];
+                    }
+                    if (!enabled[i] && gb.time < blue[i].outputs[h].time) {
+                        gb = blue[i].outputs[h];
+                    }
                     if (!blue[i].inputs[h].on) {
                         edges++;
-                        if (edges == 1) {
-                            ga = blue[i].inputs[h];
-                        } else if (edges == 2) {
-                            gb = blue[i].inputs[h];
-                        }
                     }
                     if (!blue[i].outputs[h].on) {
                         edges++;
-                        if (edges == 1) {
-                            ga = blue[i].outputs[h];
-                        } else if (edges == 2) {
-                            gb = blue[i].outputs[h];
-                        }
                     }
                 }
             }
             if (edges == 2) {
-                if (ga.time < gb.time) {
-                    blue[subId].first_entry = ga;
-                    blue[subId].last_exit = gb;
-                } else {
-                    blue[subId].first_entry = gb;
-                    blue[subId].last_exit = ga;
-                }
+                blue[subId].first_entry = ga;
+                blue[subId].last_exit = gb;
 
                 for (int i = 0; i < n; i++) {
                     if (color[id[i]] == clr && !enabled[id[i]]) {
