@@ -160,6 +160,8 @@ void buildCandidates(const char fileName[], int const tour[]);
 
 bool verifyTour(int const tour[]);
 
+void idxShuffle(int *array, size_t n);
+
 void shuffle(int *array, size_t n, size_t maxSwap);
 
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
@@ -212,7 +214,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         int k = rand() % (NUM_CITIES - 1);
         memcpy(order, tour + k + 1, sizeof(int) * (NUM_CITIES - k - 1));
         memcpy(order + (NUM_CITIES - k - 1), tour + 1, sizeof(int) * k);
-        shuffle(order, NUM_CITIES - 1, 5);
+        shuffle(order, NUM_CITIES - 1, 20);
 
         Node *curNodes = nodesBest;
         minStep = INT_MAX;
@@ -220,8 +222,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         double cumGain = 0;
         int cumK = 0;
 
-
-        for (int kick = 0; kick < 100; kick++) {
+        for (int kick = 0; kick < 10; kick++) {
             basic->nodes = curNodes;
             basic->startNode = &curNodes[0];
             basic->order = order;
@@ -398,8 +399,13 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
     int maxK = data->maxK;
     Node *t1 = t[1];
     Node *t2 = t[2 * k - 2];
-    for (int x3 = 1; x3 <= CAND_SIZE(t2->cityId); x3++) {
-        Cand *t3Cand = &(candidates[t2->cityId][x3]);
+
+    int x3Size = CAND_SIZE(t2->cityId);
+    int x3Order[x3Size];
+    idxShuffle(x3Order, x3Size);
+
+    for (int x3 = 0; x3 < x3Size; x3++) {
+        Cand *t3Cand = &(candidates[t2->cityId][x3Order[x3] + 1]);
         Node *t3 = &nodes[t3Cand->city];
         if (t3->step < data->minStep || t3->step > data->maxStep || t3->cityId == 0 || t3 == t2->from || t3 == t2->to ||
             isAdded(data, t2, t3)) {
@@ -412,8 +418,9 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
             continue;
         }
         markAdded(data, t2, t3);
+        int x4Order = rand() % 2;
         for (int x4 = 0; x4 < 2; x4++) {
-            Node *t4 = x4 == 0 ? t3->to : t3->from;
+            Node *t4 = x4 == x4Order ? t3->to : t3->from;
             if (t4->step < data->minStep || t4->step > data->maxStep || t4->cityId == 0 || isDeleted(data, t3, t4)) {
                 continue;
             }
@@ -480,6 +487,9 @@ int basicPatchCycles(KOptData *data, int k, double gain) {
         return M;
     }
 
+    Node *order[size[curCycle]];
+
+    int h = 0;
     for (i = 0; i < k; i++) {
         if (cycle[p[2 * i].v] != curCycle) {
             continue;
@@ -488,22 +498,36 @@ int basicPatchCycles(KOptData *data, int k, double gain) {
         Node *sStop = data->t[p[2 * i + 1].v];
         for (Node *s1 = sStart; s1 != sStop; s1 = s2) {
             s2 = s1->to;
-            if (s1->cityId == 0 || s2->cityId == 0 || isDeleted(data, s1, s2) || s1->step < data->minStep ||
-                s1->step > data->maxStep || s2->step < data->minStep || s2->step > data->maxStep) {
-                continue;
-            }
-            data->t[2 * k + 1] = s1;
-            data->t[2 * k + 2] = s2;
-            double d = distCity(s1->cityId, s2->cityId);
-
-            markDeleted(data, s1, s2);
-            basicPatchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, gain + d);
-            unmarkDeleted(data, s1, s2);
-            if (data->maxGain > KICK_E) {
-                return M;
-            }
+            order[h++] = s1;
         }
     }
+
+    for (i = 0; i < h - 1; i++) {
+        size_t j = i + rand() / (RAND_MAX / (h - i) + 1);
+        Node *t = order[j];
+        order[j] = order[i];
+        order[i] = t;
+    }
+
+    for (i = 0; i < h; i++) {
+        Node *s1 = order[i];
+        s2 = s1->to;
+        if (s1->cityId == 0 || s2->cityId == 0 || isDeleted(data, s1, s2) || s1->step < data->minStep ||
+            s1->step > data->maxStep || s2->step < data->minStep || s2->step > data->maxStep) {
+            continue;
+        }
+        data->t[2 * k + 1] = s1;
+        data->t[2 * k + 2] = s2;
+        double d = distCity(s1->cityId, s2->cityId);
+
+        markDeleted(data, s1, s2);
+        basicPatchCyclesRec(data, k, 2, M, curCycle, p, cycle, size, gain + d);
+        unmarkDeleted(data, s1, s2);
+        if (data->maxGain > KICK_E) {
+            return M;
+        }
+    }
+
     return M;
 }
 
@@ -516,8 +540,13 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
     Node *s1 = t[2 * k + 1];
     Node *s2 = t[i = 2 * (k + m) - 2];
     incl[incl[i] = i + 1] = i;
-    for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
-        Cand *s3Cand = &(candidates[s2->cityId][x3]);
+
+    int x3Size = CAND_SIZE(s2->cityId);
+    int x3Order[x3Size];
+    idxShuffle(x3Order, x3Size);
+
+    for (int x3 = 0; x3 < x3Size; x3++) {
+        Cand *s3Cand = &(candidates[s2->cityId][x3Order[x3] + 1]);
         Node *s3 = &data->nodes[s3Cand->city];
         if (s3->step < data->minStep || s3->step > data->maxStep || s3->cityId == 0 || s3 == s2->from || s3 == s2->to ||
             isAdded(data, s2, s3)
@@ -529,8 +558,9 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
             continue;
         }
         markAdded(data, s2, s3);
+        int x4Order = rand() % 2;
         for (int x4 = 0; x4 < 2; x4++) {
-            Node *s4 = x4 == 0 ? s3->to : s3->from;
+            Node *s4 = x4 == x4Order ? s3->to : s3->from;
             if (s4->step < data->minStep || s4->step > data->maxStep || s4->cityId == 0 || isDeleted(data, s3, s4)) {
                 continue;
             }
@@ -582,8 +612,8 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
         return;
     }
 
-    for (int x3 = 1; x3 <= CAND_SIZE(s2->cityId); x3++) {
-        Cand *s3Cand = &(candidates[s2->cityId][x3]);
+    for (int x3 = 0; x3 < x3Size; x3++) {
+        Cand *s3Cand = &(candidates[s2->cityId][x3Order[x3] + 1]);
         Node *s3 = &data->nodes[s3Cand->city];
         if (s3->step < data->minStep || s3->step > data->maxStep || s3->cityId == 0 || s3 == s2->from || s3 == s2->to ||
             isAdded(data, s2, s3)) {
@@ -593,8 +623,9 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
         if (gain - s3Cand->dist < KICK_E) {
             continue;
         }
+        int x4Order = rand() % 2;
         for (int x4 = 0; x4 < 2; x4++) {
-            Node *s4 = x4 == 0 ? s3->to : s3->from;
+            Node *s4 = x4 == x4Order ? s3->to : s3->from;
             if (s4->step < data->minStep || s4->step > data->maxStep || s4->cityId == 0 || isDeleted(data, s3, s4)) {
                 continue;
             }
@@ -1513,6 +1544,13 @@ bool verifyTour(int const tour[]) {
         used[tour[i]] = true;
     }
     return true;
+}
+
+void idxShuffle(int *array, size_t n) {
+    for (int i = 0; i < n; i++) {
+        array[i] = i;
+    }
+    shuffle(array, n, n);
 }
 
 void shuffle(int *array, size_t n, size_t maxSwap) {
