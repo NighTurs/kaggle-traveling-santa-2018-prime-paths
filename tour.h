@@ -831,7 +831,7 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
         int rNextIdx = nextCity(sol_red_idx, n, curCity, prevCity);
         int next;
 
-        if (test[id[curCity]] > 0 && sol_blue[bNextIdx] != sol_red[rNextIdx]) {
+        if (test[id[curCity]] > 0) {
             if (takenBy[id[curCity]] == 1) {
                 next = sol_blue[bNextIdx];
             } else if (takenBy[id[curCity]] == 2) {
@@ -934,7 +934,7 @@ void candidates::createTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int 
         int rNextIdx = nextCity(sol_red_idx, n, curCity, prevCity);
         int next;
 
-        if (test[id[curCity]] > 0 && sol_blue[bNextIdx] != sol_red[rNextIdx]) {
+        if (test[id[curCity]] > 0) {
             if (takenBy[id[curCity]] == 1) {
                 next = sol_blue[bNextIdx];
             } else if (takenBy[id[curCity]] == 2) {
@@ -1148,7 +1148,7 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
                            label_list,
                            sol_blue[n - 1], 0, 1, takenBy,
                            2, memory);
-    if (cost == ILLEGAL) {
+    if (cost2 == ILLEGAL) {
         return ILLEGAL;
     }
 
