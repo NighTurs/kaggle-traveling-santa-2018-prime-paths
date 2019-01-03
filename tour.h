@@ -1161,14 +1161,14 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
         return ILLEGAL;
     }
 
-    costCtrl = createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 2, memory,
-                          offspring);
-    if (fabs(cost2 - costCtrl) > 1e-5) {
-        printf("Algorithm inconsistency 6\n");
-        return ILLEGAL;
-    }
     if (cost > cost2) {
         cost = cost2;
+        costCtrl = createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 2, memory,
+                              offspring);
+        if (fabs(cost2 - costCtrl) > 1e-5) {
+            printf("Algorithm inconsistency 6\n");
+            return ILLEGAL;
+        }
     }
 
     int nComponents = 0;
