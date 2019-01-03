@@ -42,9 +42,6 @@ typedef struct {
 } PStruct;
 
 typedef struct {
-    int solTried[NUM_CITIES];
-    int solTarget;
-    int curSol;
     int *order;
     int orderSize;
     Node *nodes;
@@ -191,7 +188,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
     KOptData *datas[nThreads];
     int *order = new int[NUM_CITIES - 1];
 
-    memset(basic->solTried, 0, sizeof(basic->solTried));
     for (int i = 0; i < nThreads; i++) {
         datas[i] = (KOptData *) malloc(sizeof(KOptData));
         datas[i]->isFindMax = true;
@@ -234,6 +230,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             basic->maxGain = KICK_E;
             basic->nDeleted = 0;
             basic->nAdded = 0;
+            basic->incl[0] = 0;
             basicKOptStart(basic);
             if (basic->maxGain <= KICK_E) {
                 break;
@@ -241,16 +238,18 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             cumGain += basic->maxGain;
             cumK += basic->bestK;
 
-            calcNewNodes(basic->tBest, basic->inclBest, basic->bestK, basic->bestRev, curNodes, nodesCand, tour1);
-
-            for (int i = 2; i <= basic->bestK * 2; i++) {
-                if (minStep > basic->tBest[i]->step) {
-                    minStep = basic->tBest[i]->step;
+            for (int i = 1; i <= basic->bestK * 2; i++) {
+                int step = nodesBest[basic->tBest[i]->cityId].step;
+                if (minStep > step) {
+                    minStep = step;
                 }
-                if (maxStep < basic->tBest[i]->step) {
-                    maxStep = basic->tBest[i]->step;
+                if (maxStep < step) {
+                    maxStep = step;
                 }
             }
+
+            calcNewNodes(basic->tBest, basic->inclBest, basic->bestK, basic->bestRev, curNodes, nodesCand, tour1);
+
             curNodes = nodesCand;
         }
         if (cumGain < KICK_E) {
@@ -372,7 +371,6 @@ void basicKOptStart(KOptData *data) {
         if (t1->step < data->minStep || t1->step > data->maxStep) {
             continue;
         }
-        data->curSol = 0;
         for (int x1 = 0; x1 < 2; x1++) {
             Node *t2 = x1 == 0 ? t1->to : t1->from;
             if (t2->step < data->minStep || t2->step > data->maxStep || t2->cityId == 0 || isDeleted(data, t1, t2)) {
@@ -380,12 +378,10 @@ void basicKOptStart(KOptData *data) {
             }
             t[1] = t1;
             t[2] = t2;
-            data->solTarget = data->solTried[t1->cityId];
             markDeleted(data, t1, t2);
             basicKOptMovRec(data, 2, distCity(t1->cityId, t2->cityId));
             unmarkDeleted(data, t1, t2);
             if (data->maxGain > KICK_E) {
-//                data->solTried[t1->cityId] = data->curSol;
                 return;
             }
         }
@@ -432,13 +428,10 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
             double finalGain = curGain - distCity(t1->cityId, t4->cityId);
             if (finalGain > KICK_E && !isDeleted(data, t1, t4)) {
                 if (isFeasibleKOptMove(data, k)) {
-                    data->curSol++;
-                    if (data->curSol > data->solTarget) {
-                        writeBestOpt(data, finalGain, k, 0);
-                        unmarkAdded(data, t2, t3);
-                        unmarkDeleted(data, t3, t4);
-                        return;
-                    }
+                    writeBestOpt(data, finalGain, k, 0);
+                    unmarkAdded(data, t2, t3);
+                    unmarkDeleted(data, t3, t4);
+                    return;
                 } else {
                     if (k + 2 <= maxK && t4 != t1 && finalGain > KICK_E) {
                         markAdded(data, t4, t1);
@@ -594,13 +587,10 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
             } else if (s4 != s1) {
                 incl[incl[2 * k + 1] = 2 * (k + m)] = 2 * k + 1;
                 if (finalGain > KICK_E && isFeasibleKOptMove(data, k + m)) {
-                    data->curSol++;
-                    if (data->curSol > data->solTarget) {
-                        writeBestOpt(data, finalGain, k + m, size[curCycle]);
-                        unmarkAdded(data, s2, s3);
-                        unmarkDeleted(data, s3, s4);
-                        return;
-                    }
+                    writeBestOpt(data, finalGain, k + m, size[curCycle]);
+                    unmarkAdded(data, s2, s3);
+                    unmarkDeleted(data, s3, s4);
+                    return;
                 }
             }
             unmarkDeleted(data, s3, s4);
@@ -656,11 +646,8 @@ void basicPatchCyclesRec(KOptData *data, int k, int m, int M, int curCycle, PStr
                     incl[incl[2 * k + 1] = 2 * (k + m) + 2] = 2 * k + 1;
                     double finalGain = interGain + distCity(s5->cityId, s6->cityId) - distCity(s6->cityId, s1->cityId);
                     if (finalGain > KICK_E && isFeasibleKOptMove(data, k + m + 1)) {
-                        data->curSol++;
-                        if (data->curSol > data->solTarget) {
-                            writeBestOpt(data, finalGain, k + m + 1, size[curCycle]);
-                            return;
-                        }
+                        writeBestOpt(data, finalGain, k + m + 1, size[curCycle]);
+                        return;
                     }
                 }
             }
