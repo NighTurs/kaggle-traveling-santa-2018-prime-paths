@@ -796,6 +796,8 @@ int nextCity(int *sol_idx, int n, int curCity, int prevCity) {
     }
 }
 
+#define ILLEGAL 1e6
+
 double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *sol_red_idx,
                            int *label_list, int prevCityIn, int curCityIn, int stepIn, int takenBy[], int restTakenBy,
                            double memory[][2][10][2]) {
@@ -804,12 +806,12 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
     int step = stepIn;
     if (test[id[curCity]] > 0) {
         if (takenBy[id[curCity]] == 0) {
-            printf("Algorithm inconsistency 2");
-            exit(1);
+            printf("Algorithm inconsistency 2\n");
+            return ILLEGAL;
         }
         if (curCity != blue[id[curCity]].first_entry.num && curCity != blue[id[curCity]].last_exit.num) {
-            printf("Algorithm inconsistency 3");
-            exit(1);
+            printf("Algorithm inconsistency 3\n");
+            return ILLEGAL;
         }
         int taken = takenBy[id[curCity]] == 2 ? 1 : 0;
         if (memory[curCity][taken][step % 10][0] > 1e-9) {
@@ -839,17 +841,23 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
                 double d1 = minTour(sol_blue, sol_red, sol_blue_idx, sol_red_idx, label_list, prevCity, curCity, step,
                                     takenBy,
                                     restTakenBy, memory);
+                if (d1 == ILLEGAL) {
+                    return ILLEGAL;
+                }
                 takenBy[id[curCity]] = 2;
                 double d2 = minTour(sol_blue, sol_red, sol_blue_idx, sol_red_idx, label_list, prevCity, curCity, step,
                                     takenBy,
                                     restTakenBy, memory);
+                if (d2 == ILLEGAL) {
+                    return ILLEGAL;
+                }
                 takenBy[id[curCity]] = 0;
                 if (curCity == blue[id[curCity]].first_entry.num) {
                     next = blue[id[curCity]].last_exit.num;
                 } else {
                     if (curCity != blue[id[curCity]].last_exit.num) {
-                        printf("Algorithm inconsistency 1");
-                        exit(1);
+                        printf("Algorithm inconsistency 1\n");
+                        return ILLEGAL;
                     }
                     next = blue[id[curCity]].first_entry.num;
                 }
@@ -905,8 +913,8 @@ double candidates::minTour(int *sol_blue, int *sol_red, int *sol_blue_idx, int *
         memory[curCityIn][taken][stepIn % 10][0] = cost;
         memory[curCityIn][taken][stepIn % 10][1] = step - stepIn;
         if (count != blue[id[curCityIn]].last_exit.time - blue[id[curCityIn]].first_entry.time + 2) {
-            printf("Algorithm inconsistency 4");
-            exit(1);
+            printf("Algorithm inconsistency 4\n");
+            return ILLEGAL;
         }
     }
     return cost;
@@ -994,7 +1002,7 @@ void candidates::merge_components() {
         memset(color, 0, sizeof(int) * n_cand);
         int curColor = 1;
         for (int i = 0; i < n_cand; i++) {
-            if (color[i] != 0 || !enabled[i]) {
+            if (color[i] != 0 || !enabled[i] || test[i] < 1) {
                 continue;
             }
             b[0] = i;
@@ -1127,6 +1135,9 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
                           label_list,
                           sol_blue[n - 1], 0, 1, takenBy,
                           1, memory);
+    if (cost == ILLEGAL) {
+        return ILLEGAL;
+    }
 
     createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 1, memory, offspring);
 
@@ -1136,6 +1147,9 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
                            label_list,
                            sol_blue[n - 1], 0, 1, takenBy,
                            2, memory);
+    if (cost == ILLEGAL) {
+        return ILLEGAL;
+    }
 
     if (cost > cost2) {
         cost = cost2;

@@ -220,7 +220,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             basic->startNode = &curNodes[0];
             basic->order = order;
             basic->orderSize = NUM_CITIES - 1;
-            basic->maxK = 5;
+            basic->maxK = 7;
             basic->maxStep = k + 1000;
             basic->minStep = k - 1000;
             basic->cycleMax = NUM_CITIES;
@@ -259,7 +259,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         do {
             double curCost = getTourCost(nodesCand);
             double maxGain = 0;
-            int itK = 4;
+            int itK = 5;
             for (int i = 0; i < nThreads; i++) {
                 KOptData *cur = datas[i];
                 cur->nodes = nodesCand;
@@ -326,8 +326,9 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         double gainDiff = getTourCost(nodesBest) - getTourCost(nodesCand);
 
         if (fabs(gainDiff) > E) {
-            gpx(tour, tour1, tour2);
-            buildNodes(tour2, nodesCand);
+            if (gpx(tour, tour1, tour2) != 1e6) {
+                buildNodes(tour2, nodesCand);
+            }
         }
 
         gainDiff = getTourCost(nodesBest) - getTourCost(nodesCand);
