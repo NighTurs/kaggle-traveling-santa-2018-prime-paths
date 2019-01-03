@@ -210,7 +210,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         int k = rand() % (NUM_CITIES - 1);
         memcpy(order, tour + k + 1, sizeof(int) * (NUM_CITIES - k - 1));
         memcpy(order + (NUM_CITIES - k - 1), tour + 1, sizeof(int) * k);
-        shuffle(order, NUM_CITIES - 1, 20);
 
         Node *curNodes = nodesBest;
         minStep = INT_MAX;
@@ -219,6 +218,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         int cumK = 0;
 
         for (int kick = 0; kick < 10; kick++) {
+            shuffle(order, NUM_CITIES - 1, 5);
             basic->nodes = curNodes;
             basic->startNode = &curNodes[0];
             basic->order = order;
