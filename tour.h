@@ -1130,7 +1130,7 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
 
     int takenBy[n];
     memset(takenBy, 0, sizeof(takenBy));
-    memset(memory, 0, sizeof(double) * NUM_CITIES * 2 * 10 * 2);
+    memset(memory, 0, sizeof(double) * n * 2 * 10 * 2);
     double cost = minTour(sol_blue, sol_red, sol_blue_index, sol_red_index,
                           label_list,
                           sol_blue[n - 1], 0, 1, takenBy,
@@ -1141,7 +1141,8 @@ candidates::off_gen(int *sol_blue, int *sol_red, int *offspring, int *label_list
 
     createTour(sol_blue, sol_red, sol_blue_index, sol_red_index, label_list, takenBy, 1, memory, offspring);
 
-    memset(memory, 0, sizeof(double) * NUM_CITIES * 2 * 10 * 2);
+    memset(takenBy, 0, sizeof(takenBy));
+    memset(memory, 0, sizeof(double) * n * 2 * 10 * 2);
 
     double cost2 = minTour(sol_blue, sol_red, sol_blue_index, sol_red_index,
                            label_list,
