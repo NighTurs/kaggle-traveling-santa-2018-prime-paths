@@ -19,7 +19,8 @@
 #define WRITE_BUFF_SIZE 4096
 #define MAX_CAND 100
 #define PENALTY 1.1
-#define MAX_K 20
+#define MAX_K 60
+#define K_INC 5
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
 #define KICK_E 1e-9
@@ -75,7 +76,9 @@ typedef struct {
     bool isFindMax;
 } KOptData;
 
-double pureLimit[] {-10, -10, -10, -10, -6, -5, -4, -3, -2, -1, 0, 0, 0};
+double pureLimit[]{0, -10, -10, -10, -8, -8, -6, -6, -5, -5, -4, -4, -3, -3, -2, -2, -2, -2, -1, -1, 0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int tour[NUM_CITIES];
 int tour1[NUM_CITIES];
 int tour2[NUM_CITIES];
@@ -668,34 +671,42 @@ void *kOptStart(void *arg) {
     data->secStart = start.tv_sec;
     data->secEnd = start.tv_sec;
     data->timeChecks = 1;
-    for (int i = 0; i < data->orderSize; i++) {
-        Node *t1 = &data->nodes[data->order[i]];
-        if (t1->step < data->minStep || t1->step > data->maxStep) {
-            continue;
-        }
-        for (int x1 = 0; x1 < 2; x1++) {
-            Node *t2 = x1 == 0 ? t1->to : t1->from;
-            if (t2->step < data->minStep || t2->step > data->maxStep || t2->cityId == 0 || isDeleted(data, t1, t2)) {
+    int processed = 0;
+    while (true) {
+        for (int i = 0; i < data->orderSize; i++) {
+            Node *t1 = &data->nodes[data->order[i]];
+            if (t1->step < data->minStep || t1->step > data->maxStep) {
                 continue;
             }
-            t[1] = t1;
-            t[2] = t2;
-            data->minT = t1->cityId;
-            markDeleted(data, t1, t2);
-            kOptMovRec(data, 2, 0);
-            unmarkDeleted(data, t1, t2);
-            if (!data->isFindMax && data->maxGain > E) {
-                data->nProcessed = i + 1;
-                return NULL;
-            }
-            if (timeLimitExceeded(data)) {
-                data->nProcessed = i + 1;
-                return NULL;
+            processed++;
+            for (int x1 = 0; x1 < 2; x1++) {
+                Node *t2 = x1 == 0 ? t1->to : t1->from;
+                if (t2->step < data->minStep || t2->step > data->maxStep || t2->cityId == 0 ||
+                    isDeleted(data, t1, t2)) {
+                    continue;
+                }
+                t[1] = t1;
+                t[2] = t2;
+                data->minT = t1->cityId;
+                markDeleted(data, t1, t2);
+                kOptMovRec(data, 2, 0);
+                unmarkDeleted(data, t1, t2);
+                if (!data->isFindMax && data->maxGain > E) {
+                    data->nProcessed = processed;
+                    return NULL;
+                }
+                if (timeLimitExceeded(data)) {
+                    data->nProcessed = processed;
+                    return NULL;
+                }
             }
         }
+        data->maxK += K_INC;
+        if (data->maxK > MAX_K) {
+            data->nProcessed = processed;
+            return NULL;
+        }
     }
-    data->nProcessed = data->orderSize;
-    return NULL;
 }
 
 void kOptMovRec(KOptData *data, int k, double pureGain) {
@@ -1562,7 +1573,7 @@ void readCities(const char fileName[]) {
 }
 
 bool verifyTour(int const tour[]) {
-    bool used[NUM_CITIES] {false};
+    bool used[NUM_CITIES]{false};
     for (int i = 0; i < NUM_CITIES; i++) {
         if (tour[i] >= NUM_CITIES || used[tour[i]]) {
             return false;
