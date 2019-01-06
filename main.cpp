@@ -23,7 +23,7 @@
 #define K_INC 5
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
-#define KICK_E 1e-9
+#define KICK_E -0.4
 
 typedef struct {
     int city;
@@ -224,15 +224,15 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         double cumGain = 0;
         int cumK = 0;
 
-        for (int kick = 0; kick < 10; kick++) {
-            shuffle(order, NUM_CITIES - 1, 20);
+        for (int kick = 0; kick < 16; kick++) {
+            shuffle(order, NUM_CITIES - 1, NUM_CITIES);
             basic->nodes = curNodes;
             basic->startNode = &curNodes[0];
             basic->order = order;
             basic->orderSize = NUM_CITIES - 1;
-            basic->maxK = 7;
-            basic->maxStep = k + 1000;
-            basic->minStep = k - 1000;
+            basic->maxK = 8;
+            basic->maxStep = k + 500;
+            basic->minStep = k - 500;
             basic->cycleMax = NUM_CITIES;
             basic->maxGain = KICK_E;
             basic->nDeleted = 0;
@@ -259,10 +259,6 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
 
             curNodes = nodesCand;
         }
-        if (cumGain < KICK_E) {
-            printf("No improvements found k=%d\n", k);
-            continue;
-        }
         printf("Trying improvement Gain=%.3lf K=%d MaxStep=%d MinStep=%d StepDiff=%d\n", cumGain, cumK, maxStep,
                minStep, maxStep - minStep);
         fflush(stdout);
@@ -273,7 +269,7 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         do {
             double curCost = getTourCost(nodesCand);
             double maxGain = 0;
-            int itK = 9;
+            int itK = 7;
             for (int i = 0; i < nThreads; i++) {
                 KOptData *cur = datas[i];
                 cur->nodes = nodesCand;
@@ -282,8 +278,8 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
                 cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
                 cur->maxK = itK;
                 cur->cycleMax = cycleLen;
-                cur->minStep = minStep - 100;
-                cur->maxStep = maxStep + 100;
+                cur->minStep = minStep - 500;
+                cur->maxStep = maxStep + 500;
                 cur->maxGain = 0;
                 cur->timeLimit = timeLimit;
                 cur->doReverse = false;
