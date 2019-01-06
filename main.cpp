@@ -24,6 +24,7 @@
 #define ILLEGAL_OPT -1e6
 #define E 1e-9
 #define KICK_E -0.4
+#define MICRO 1e6
 
 typedef struct {
     int city;
@@ -64,9 +65,9 @@ typedef struct {
     int bestK;
     int bestRev;
     int bestCycle;
-    int timeLimit;
-    long secStart;
-    long secEnd;
+    double timeLimit;
+    double secStart;
+    double secEnd;
     long long timeChecks;
     int minT;
     int minStep;
@@ -88,7 +89,7 @@ Node nodes1[NUM_CITIES];
 Cand candidates[NUM_CITIES][MAX_CAND + 1];
 #define CAND_SIZE(x) (candidates[x][0].city)
 
-void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen);
+void improveTour(int nThreads, const char subFile[], double timeLimit, int cycleLen);
 
 void basicKOptStart(KOptData *data);
 
@@ -183,11 +184,11 @@ int main(int argc, char **argv) {
     fillPrimes();
     buildNodes(tour, nodes);
     printf("%.5lf\n", getTourCost(nodes));
-    improveTour(atoi(argv[4]), argv[3], atoi(argv[5]), atoi(argv[6]));
+    improveTour(atoi(argv[4]), argv[3], atof(argv[5]), atoi(argv[6]));
     return 0;
 }
 
-void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen) {
+void improveTour(int nThreads, const char subFile[], double timeLimit, int cycleLen) {
     struct timeval start, end;
     struct timeval start2, end2;
     pthread_t thread_id[nThreads];
@@ -315,9 +316,9 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
             calcNewNodes(bestData->tBest, bestData->inclBest, bestData->bestK, bestData->bestRev, nodesCand, nodesCand,
                          tour1);
             double newCost = getTourCost(nodesCand);
-            printf("------Iter=%d Time=%ld Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d Processed=%d\n",
+            printf("------Iter=%d Time=%lf Gain=%.3lf GainDiff=%.3lf Cost=%.3lf K=%d CycleLen=%d Processed=%d\n",
                    iter,
-                   end2.tv_sec - start2.tv_sec,
+                   end2.tv_sec + end2.tv_usec / MICRO - start2.tv_sec - start2.tv_usec / MICRO,
                    bestData->maxGain,
                    curCost - newCost - bestData->maxGain,
                    newCost,
@@ -348,8 +349,8 @@ void improveTour(int nThreads, const char subFile[], int timeLimit, int cycleLen
         gainDiff = getTourCost(nodesBest) - getTourCost(nodesCand);
 
         if (gainDiff > E) {
-            printf("Improvement Time=%ld Gain=%.3lf Cost=%.3lf\n",
-                   end.tv_sec - start.tv_sec,
+            printf("Improvement Time=%lf Gain=%.3lf Cost=%.3lf\n",
+                   end.tv_sec + end.tv_usec / MICRO - start.tv_sec - start.tv_usec / MICRO,
                    gainDiff,
                    getTourCost(nodesCand)
             );
@@ -664,8 +665,8 @@ void *kOptStart(void *arg) {
     Node **t = data->t;
     struct timeval start;
     gettimeofday(&start, NULL);
-    data->secStart = start.tv_sec;
-    data->secEnd = start.tv_sec;
+    data->secStart = start.tv_sec + start.tv_usec / MICRO;
+    data->secEnd = data->secStart;
     data->timeChecks = 1;
     int processed = 0;
     while (true) {
@@ -1073,13 +1074,9 @@ bool timeLimitExceeded(KOptData *data) {
     if (data->timeChecks % TIME_CHECK_FREQ == 0) {
         struct timeval t;
         gettimeofday(&t, NULL);
-        data->secEnd = t.tv_sec;
+        data->secEnd = t.tv_sec + t.tv_usec / MICRO;
     }
-    if (data->secEnd - data->secStart >= data->timeLimit) {
-        return true;
-    } else {
-        return false;
-    }
+    return data->secEnd - data->secStart >= data->timeLimit;
 }
 
 int isFeasibleKOptMove(KOptData *data, int k) {
