@@ -431,6 +431,7 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
             markDeleted(data, t3, t4);
             double curGain = gain - t3Cand->dist + distCity(t3->cityId, t4->cityId);
             double finalGain = curGain - distCity(t1->cityId, t4->cityId);
+            int cycle = 1;
             if (finalGain > KICK_E && !isDeleted(data, t1, t4)) {
                 if (isFeasibleKOptMove(data, k)) {
                     writeBestOpt(data, finalGain, k, 0);
@@ -440,7 +441,7 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
                 } else {
                     if (k + 2 <= maxK && t4 != t1 && finalGain > KICK_E) {
                         markAdded(data, t4, t1);
-                        basicPatchCycles(data, k, finalGain);
+                        cycle = basicPatchCycles(data, k, finalGain);
                         unmarkAdded(data, t4, t1);
                         if (data->maxGain > KICK_E) {
                             unmarkAdded(data, t2, t3);
@@ -451,7 +452,7 @@ void basicKOptMovRec(KOptData *data, int k, double gain) {
                 }
             }
 
-            if (k < maxK) {
+            if (k + (cycle - 2 > 0 ? cycle - 2 : 0) < maxK) {
                 basicKOptMovRec(data, k + 1, curGain);
                 if (data->maxGain > KICK_E) {
                     unmarkAdded(data, t2, t3);
