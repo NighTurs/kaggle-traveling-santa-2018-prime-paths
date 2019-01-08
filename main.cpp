@@ -77,7 +77,7 @@ typedef struct {
     bool isFindMax;
 } KOptData;
 
-double pureLimit[]{0, -10, -10, -7, -5, -5, -4, -4, -4, -4, -4, -3, -3, -3, -3, -2, -2, -2, -1, -1, -1, -1, 0, 0, 0, 0,
+double pureLimit[]{0, -10, -10, -7, -5, -5, -4, -4, -3, -3, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int tour[NUM_CITIES];
@@ -172,7 +172,7 @@ void shuffle(int *array, size_t n, size_t maxSwap);
 //args: original_tour, submission_in, submission_out, num_threads, timeLimit, cycleLength
 int main(int argc, char **argv) {
     read_problem("my_lkh_100.tsp");
-    srand(3981001);
+    srand(13);
     readCities("cities.csv");
     readTourSubmission(argv[1], tour);
     buildCandidates("my2.cand", tour);
@@ -225,15 +225,15 @@ void improveTour(int nThreads, const char subFile[], double timeLimit, int cycle
         double cumGain = 0;
         int cumK = 0;
 
-        for (int kick = 0; kick < 8; kick++) {
+        for (int kick = 0; kick < 11; kick++) {
             shuffle(order, NUM_CITIES - 1, NUM_CITIES);
             basic->nodes = curNodes;
             basic->startNode = &curNodes[0];
             basic->order = order;
             basic->orderSize = NUM_CITIES - 1;
             basic->maxK = 8;
-            basic->maxStep = k + 2000;
-            basic->minStep = k - 2000;
+            basic->maxStep = k + 2500;
+            basic->minStep = k - 2500;
             basic->cycleMax = NUM_CITIES;
             basic->maxGain = KICK_E;
             basic->nDeleted = 0;
@@ -270,7 +270,7 @@ void improveTour(int nThreads, const char subFile[], double timeLimit, int cycle
         do {
             double curCost = getTourCost(nodesCand);
             double maxGain = 0;
-            int itK = 5;
+            int itK = 6;
             for (int i = 0; i < nThreads; i++) {
                 KOptData *cur = datas[i];
                 cur->nodes = nodesCand;
@@ -279,8 +279,8 @@ void improveTour(int nThreads, const char subFile[], double timeLimit, int cycle
                 cur->orderSize = (i + 1) * chunk > NUM_CITIES - 1 ? NUM_CITIES - 1 - (i * chunk) : chunk;
                 cur->maxK = itK;
                 cur->cycleMax = cycleLen;
-                cur->minStep = minStep - 300;
-                cur->maxStep = maxStep + 300;
+                cur->minStep = minStep - 350;
+                cur->maxStep = maxStep + 350;
                 cur->maxGain = 0;
                 cur->timeLimit = timeLimit;
                 cur->doReverse = false;
@@ -1457,7 +1457,7 @@ void buildCandidates(const char fileName[], int const tour[]) {
             break;
         }
         sscanf(buff, "%d %d %d %n", &cityA, &cityB, &num, &pos);
-        num = num > 4 ? 4 : num;
+//        num = num > 4 ? 4 : num;
         cityA--;
         cityB--;
         candidates[cityA][0].city = num;
