@@ -1,0 +1,13 @@
+*
+!.gitignore
+!makefile
+!main.cpp
+!file_man.cpp
+!BuscaEmProfundidade.h
+!defs.h
+!global.cpp
+!gpx.cpp
+!Grafo.h
+!Lista.h
+!tour.h
+!util_functions.cpp
