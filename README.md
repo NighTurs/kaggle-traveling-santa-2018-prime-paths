@@ -1,6 +1,6 @@
 ## 3rd palce solution to [Traveling Santa 2018 - Prime Paths](https://www.kaggle.com/c/traveling-santa-2018-prime-paths)
 
-Code is a real mess, that is not how you should use branches... Still I don't think I will ever clean it, so will just give hints how to use this mess. Will do that by giving examples how to run it for every stage I listed on my [kaggle post](https://www.kaggle.com/c/traveling-santa-2018-prime-paths).
+Code is a real mess, that is not how you should use branches... Still I don't think I will ever clean it, so will just give hints how to use this mess. Will do that by giving examples how to run it for every stage I listed on my [kaggle post](https://www.kaggle.com/c/traveling-santa-2018-prime-paths/discussion/77324).
 You may have troubles running it on Windows because of gettimeofday (comment it out maybe..).
 
 #### First stage:
